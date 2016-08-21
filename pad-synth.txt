@@ -4,6 +4,8 @@ out_pin:Left
 out_pin:Right
 
 @init
+can_recompute = 1;
+action_recompute = 1;
 polyphony = 64;
 
 notes_start = 0;
@@ -28,22 +30,26 @@ wavetable_headerlength = 1; // Freq
 wavetable_step = wavetable_headerlength + wavetable_sampleslength;
 wavetables_end = wavetables_start + wavetables_count*wavetable_step;
 
-wavetable = wavetables_start;
-wavetable[0] = srate/wavetable_sampleslength;
-wavetable_samples = wavetable + wavetable_headerlength;
-i = 0;
-while (
-  angle = i/wavetable_sampleslength*2*$pi;
-  wavetable_samples[i] = sin(angle) + 0.1*sin(angle*3) + 0.01*sin(angle*5);
-  i += 1;
-  i < wavetable_sampleslength;
-);
-
 volume_db = -12;
 volume = pow(10, volume_db/20);
 note_maxduration = srate*60*60*24*365;
 
 @block
+action_recompute ? (
+	can_recompute = 0;
+	action_recompute = 0;
+	wavetable = wavetables_start;
+	wavetable[0] = srate/wavetable_sampleslength;
+	wavetable_samples = wavetable + wavetable_headerlength;
+	i = 0;
+	while (
+	  angle = i/wavetable_sampleslength*2*$pi;
+	  wavetable_samples[i] = sin(angle) + 0.1*sin(angle*3) + 0.01*sin(angle*5);
+	  i += 1;
+	  i < wavetable_sampleslength;
+	);
+);
+
 midi_event = midirecv(midi_offset, midi_msg1, midi_msg23);
 midi_event ? while (
   midisend(midi_offset, midi_msg1, midi_msg23); // passthrough
