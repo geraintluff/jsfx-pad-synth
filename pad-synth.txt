@@ -37,7 +37,7 @@ volume_db = -12;
 volume = pow(10, volume_db/20);
 note_maxduration = srate*60*60*24*365;
 
-param_width_cents = 1;
+param_width_cents = 20;
 param_width = param_width_cents/1200*log(2);
 wavetable_maxfreq = 20000;
 wavetable_refsrate = 48000;
@@ -58,6 +58,7 @@ action_recompute ? (
 			i += 1;
 			i < wavetable_sampleslength*2;
 		);
+		
 		harmonic_freq = base_freq;
 		// Power pattern: 1/f
 		power = base_freq/harmonic_freq;
@@ -69,7 +70,7 @@ action_recompute ? (
 			while (
 				index2 = wavetable_sampleslength - index;
 				indexfreq = index/wavetable_sampleslength*wavetable_refsrate;
-				stddistance = log(indexfreq/harmonic_freq)/param_width;
+				stddistance = log(indexfreq/harmonic_freq)*2/param_width;
 				amp = sqrt(power/harmonic_freq)*exp(-stddistance*stddistance); // Gaussian
 				phase1 = rand(2*$pi);
 				phase2 = rand(2*$pi);
@@ -87,17 +88,11 @@ action_recompute ? (
 		);
 		
 		// FFT
-		//fft_ipermute(fftblock, 32768);
-		//ifft(fftblock, 32768);
+		index = floor(base_freq/wavetable_refsrate*wavetable_sampleslength);
+		//fftblock[index*2] = 1;
+		fft_ipermute(fftblock, 32768);
+		ifft(fftblock, 32768);
 
-		i = 0;
-		while (
-			value = sin(i*2*$pi*base_freq/wavetable_sampleslength);
-			fftblock[2*i] = fftblock[2*i + 1] = value;
-			i += 1;
-			i < wavetable_sampleslength;
-		);
-		
 		// Normalise
 		sum2 = 0;
 		maxabs = 0;
