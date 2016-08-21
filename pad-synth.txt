@@ -7,6 +7,7 @@ out_pin:Right
 can_recompute = 0;
 action_recompute = 1;
 polyphony = 64;
+ext_noinit = 1;
 
 fftblock = 0;
 fftblock_end = 65536;
@@ -27,7 +28,7 @@ notes_step = 16;
 notes_end = notes_start + polyphony*notes_step;
 
 wavetables_start = notes_end;
-wavetables_count = 1;
+wavetables_count = 18;
 wavetable_sampleslength = 32768;
 wavetable_headerlength = 1; // Freq
 wavetable_step = wavetable_headerlength + wavetable_sampleslength*2;
@@ -39,10 +40,11 @@ note_maxduration = srate*60*60*24*365;
 
 param_width_cents = 20;
 param_width = param_width_cents/1200*log(2);
-wavetable_maxfreq = 20000;
+wavetable_maxfreq = 18000;
 wavetable_refsrate = 48000;
-wavetable_centre = 300;
-wavetable_octaves = 5;
+// 6+ octaves, centred on 440
+wavetable_low = 50;
+wavetable_high = 4000;
 
 @block
 action_recompute ? (
@@ -50,7 +52,8 @@ action_recompute ? (
 	action_recompute = 0;
 	wavetable_index = 0;
 	while (
-		base_freq = 200;
+		ratio = (wavetable_index + 0.5)/wavetables_count;
+		base_freq = exp(log(wavetable_low) + log(wavetable_high/wavetable_low)*ratio);
 		// Zero it out
 		i = 0;
 		while (
@@ -63,9 +66,9 @@ action_recompute ? (
 		// Power pattern: 1/f
 		power = base_freq/harmonic_freq;
 		while (
-			lowindex = max(1, floor(harmonic_freq*exp(-param_width*4)*wavetable_sampleslength/wavetable_refsrate));
+			lowindex = max(1, floor(harmonic_freq*exp(-param_width*2)*wavetable_sampleslength/wavetable_refsrate));
 			highindex = min(wavetable_sampleslength/2 - 1, ceil(harmonic_freq*pow(2, param_width_cents*4)*wavetable_sampleslength/wavetable_refsrate));
-			// TODO: some kind of sum to make sure we're actually giving the right amount of energy
+			// TODO: some kind of sum to make sure we're actually giving the right amount of energy?
 			index = lowindex;
 			while (
 				index2 = wavetable_sampleslength - index;
@@ -103,7 +106,7 @@ action_recompute ? (
 			i += 1;
 			i < wavetable_sampleslength*2;
 		);
-		factor = volume/sqrt(sum2/(2*wavetable_sampleslength));
+		factor = 0.25/sqrt(sum2/(2*wavetable_sampleslength));
 
 		// Place in wavetable
 		wavetable = wavetables_start + wavetable_step*wavetable_index;
@@ -154,7 +157,9 @@ midi_event ? while (
 			note[N_AMP] = midi_msg3/127;
 			
 			// Wavetable params
-			note[N_WAVEINDEX] = 0; // Wavetable #0
+			wavetable_index = log(note[N_FREQ]/wavetable_low)/log(wavetable_high/wavetable_low)*wavetables_count;
+			wavetable_index = min(wavetables_count - 1, max(0, floor(wavetable_index)));
+			note[N_WAVEINDEX] = wavetable_index; // Wavetable #0
 			note[N_SAMPLEPOS] = rand(wavetable_sampleslength);
 		);
 	) : (midi_type == $x8 || (midi_type == $x9 && midi_msg3 == 0)) ? (
