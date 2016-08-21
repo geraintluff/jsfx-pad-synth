@@ -4,11 +4,14 @@ out_pin:Left
 out_pin:Right
 
 @init
-can_recompute = 1;
+can_recompute = 0;
 action_recompute = 1;
 polyphony = 64;
 
-notes_start = 0;
+fftblock = 0;
+fftblock_end = 65536;
+
+notes_start = fftblock_end;
 N_ACTIVE = 0;
 N_CHANNEL = 1;
 N_NOTE = 2;
@@ -25,87 +28,161 @@ notes_end = notes_start + polyphony*notes_step;
 
 wavetables_start = notes_end;
 wavetables_count = 1;
-wavetable_sampleslength = 1024;
+wavetable_sampleslength = 32768;
 wavetable_headerlength = 1; // Freq
-wavetable_step = wavetable_headerlength + wavetable_sampleslength;
+wavetable_step = wavetable_headerlength + wavetable_sampleslength*2;
 wavetables_end = wavetables_start + wavetables_count*wavetable_step;
 
 volume_db = -12;
 volume = pow(10, volume_db/20);
 note_maxduration = srate*60*60*24*365;
 
+param_width_cents = 1;
+param_width = param_width_cents/1200*log(2);
+wavetable_maxfreq = 20000;
+wavetable_refsrate = 48000;
+wavetable_centre = 300;
+wavetable_octaves = 5;
+
 @block
 action_recompute ? (
 	can_recompute = 0;
 	action_recompute = 0;
-	wavetable = wavetables_start;
-	wavetable[0] = srate/wavetable_sampleslength;
-	wavetable_samples = wavetable + wavetable_headerlength;
-	i = 0;
+	wavetable_index = 0;
 	while (
-	  angle = i/wavetable_sampleslength*2*$pi;
-	  wavetable_samples[i] = sin(angle) + 0.1*sin(angle*3) + 0.01*sin(angle*5);
-	  i += 1;
-	  i < wavetable_sampleslength;
+		base_freq = 200;
+		// Zero it out
+		i = 0;
+		while (
+			fftblock[i] = 0;
+			i += 1;
+			i < wavetable_sampleslength*2;
+		);
+		harmonic_freq = base_freq;
+		// Power pattern: 1/f
+		power = base_freq/harmonic_freq;
+		while (
+			lowindex = max(1, floor(harmonic_freq*exp(-param_width*4)*wavetable_sampleslength/wavetable_refsrate));
+			highindex = min(wavetable_sampleslength/2 - 1, ceil(harmonic_freq*pow(2, param_width_cents*4)*wavetable_sampleslength/wavetable_refsrate));
+			// TODO: some kind of sum to make sure we're actually giving the right amount of energy
+			index = lowindex;
+			while (
+				index2 = wavetable_sampleslength - index;
+				indexfreq = index/wavetable_sampleslength*wavetable_refsrate;
+				stddistance = log(indexfreq/harmonic_freq)/param_width;
+				amp = sqrt(power/harmonic_freq)*exp(-stddistance*stddistance); // Gaussian
+				phase1 = rand(2*$pi);
+				phase2 = rand(2*$pi);
+				
+				fftblock[2*index] += amp*cos(phase1);
+				fftblock[2*index + 1] += amp*sin(phase1);
+				fftblock[2*index2] += amp*cos(phase2);
+				fftblock[2*index2 + 1] += amp*sin(phase2);
+				index += 1;
+				index < highindex;
+			);
+			
+			harmonic_freq += base_freq;
+			harmonic_freq < wavetable_maxfreq;
+		);
+		
+		// FFT
+		//fft_ipermute(fftblock, 32768);
+		//ifft(fftblock, 32768);
+
+		i = 0;
+		while (
+			value = sin(i*2*$pi*base_freq/wavetable_sampleslength);
+			fftblock[2*i] = fftblock[2*i + 1] = value;
+			i += 1;
+			i < wavetable_sampleslength;
+		);
+		
+		// Normalise
+		sum2 = 0;
+		maxabs = 0;
+		i = 0;
+		while (
+			sum2 += fftblock[i]*fftblock[i];
+			maxabs = max(maxabs, abs(fftblock[i]));
+			i += 1;
+			i < wavetable_sampleslength*2;
+		);
+		factor = volume/sqrt(sum2/(2*wavetable_sampleslength));
+
+		// Place in wavetable
+		wavetable = wavetables_start + wavetable_step*wavetable_index;
+		wavetable[0] = base_freq;//*srate/wavetable_refsrate;
+		wavetable_samples = wavetable + wavetable_headerlength;
+		assignedwavetable = wavetable;
+		i = 0;
+		while (
+			wavetable_samples[i] = fftblock[i]*factor;
+			i += 1;
+			i < wavetable_sampleslength*2;
+		);
+		first = fftblock[0];
+		first2 = wavetable_samples[0];
+		
+		wavetable_index += 1;
+		wavetable_index < wavetables_count;
 	);
 );
 
 midi_event = midirecv(midi_offset, midi_msg1, midi_msg23);
 midi_event ? while (
-  midisend(midi_offset, midi_msg1, midi_msg23); // passthrough
-  midi_type = midi_msg1>>4;
-  midi_channel = midi_msg1&0x0f;
-  midi_msg2 = midi_msg23&$xff; // note / controller
-  midi_msg3 = midi_msg23>>8; // velocity / value
-  (midi_type == $x9 && midi_msg3 != 0) ? (
-    // Note on
-    note = notes_start;
-    while (
-      note[0] ? (
-        note += notes_step;
-        note < notes_end;
-      );
-      note[0] && note < notes_end;
-    );
-    // Found a free slot
-    note < notes_end ? (
-      // Note parameters
-      note[0] = 1;
-      note[N_CHANNEL] = midi_channel;
-      note[N_NOTE] = midi_msg2;
-      note[N_VEL] = midi_msg3;
-      note[N_SAMPLESFROMSTART] = midi_offset;
-      note[N_SAMPLESFROMEND] = -note_maxduration;
-      note[N_FREQ] = 440*pow(2, (midi_msg2 - 69)/12);
-      note[N_AMP] = midi_msg3/127;
-      
-      // Wavetable params
-      note[N_WAVEINDEX] = 0; // Wavetable #0
-      // Hopefully unpredictable, but non-deterministic
-      //note[N_SAMPLEPOS] = (play_position*srate + midi_offset)%wavetable_sampleslength;
-      note[N_SAMPLEPOS] = 0;
-    );
-  ) : (midi_type == $x8 || (midi_type == $x9 && midi_msg3 == 0)) ? (
-    // Note off 
-    note = notes_start;
-    while (
-      note[0] && note[N_CHANNEL] == midi_channel && note[N_NOTE] == midi_msg2 ? (
-        note[N_SAMPLESFROMEND] = max(note[N_SAMPLESFROMEND], -midi_offset);
-      );
-      note += notes_step;
-      note < notes_end;
-    );
-  );
-  
-  midi_event = midirecv(midi_offset, midi_msg1, midi_msg23);
+	midisend(midi_offset, midi_msg1, midi_msg23); // passthrough
+	midi_type = midi_msg1>>4;
+	midi_channel = midi_msg1&0x0f;
+	midi_msg2 = midi_msg23&$xff; // note / controller
+	midi_msg3 = midi_msg23>>8; // velocity / value
+	(midi_type == $x9 && midi_msg3 != 0) ? (
+		// Note on
+		note = notes_start;
+		while (
+			note[0] ? (
+				note += notes_step;
+				note < notes_end;
+			);
+			note[0] && note < notes_end;
+		);
+		// Found a free slot
+		note < notes_end ? (
+			// Note parameters
+			note[0] = 1;
+			note[N_CHANNEL] = midi_channel;
+			note[N_NOTE] = midi_msg2;
+			note[N_VEL] = midi_msg3;
+			note[N_SAMPLESFROMSTART] = midi_offset;
+			note[N_SAMPLESFROMEND] = -note_maxduration;
+			note[N_FREQ] = 440*pow(2, (midi_msg2 - 69)/12);
+			note[N_AMP] = midi_msg3/127;
+			
+			// Wavetable params
+			note[N_WAVEINDEX] = 0; // Wavetable #0
+			note[N_SAMPLEPOS] = rand(wavetable_sampleslength);
+		);
+	) : (midi_type == $x8 || (midi_type == $x9 && midi_msg3 == 0)) ? (
+		// Note off 
+		note = notes_start;
+		while (
+			note[0] && note[N_CHANNEL] == midi_channel && note[N_NOTE] == midi_msg2 ? (
+				note[N_SAMPLESFROMEND] = max(note[N_SAMPLESFROMEND], -midi_offset);
+			);
+			note += notes_step;
+			note < notes_end;
+		);
+	);
+	
+	midi_event = midirecv(midi_offset, midi_msg1, midi_msg23);
 );
 
 polyphony_current = 0;
 note = notes_start;
 while (
-  note[0] ? polyphony_current += 1;
-  note += notes_step;
-  note < notes_end;
+	note[0] ? polyphony_current += 1;
+	note += notes_step;
+	note < notes_end;
 );
 
 @sample
@@ -115,50 +192,55 @@ attack = 0.01*srate;
 release = 0.02*srate;
 activecount = 0;
 while (
-  note[0] ? (
-    activecount += 1;
-    note[N_SAMPLESFROMSTART] > 0 ? (
-      amp = volume*note[N_VEL]/127;
-      note[N_SAMPLESFROMSTART] < attack ? (
-        amp *= note[N_SAMPLESFROMSTART]/attack;
-      );
-      note[N_SAMPLESFROMEND] > 0 ? (
-        note[N_SAMPLESFROMEND] > release ? (
-          amp = 0;
-          note[0] = 0;
-        ) : (
-          amp *= 1 - (note[N_SAMPLESFROMEND]/release);
-        );
-      );
-      
-      wavetable = wavetables_start + note[N_WAVEINDEX]*wavetable_step;
-      wavetable_samples = wavetable + wavetable_headerlength;
-      midsample = note[N_SAMPLEPOS];
-      lowsample = floor(midsample);
-      highsample = ceil(midsample)%wavetable_sampleslength;
-      ratio = (midsample - lowsample);
-      lowvalue = wavetable_samples[lowsample];
-      highvalue = wavetable_samples[highsample];
-      midvalue = lowvalue + (highvalue - lowvalue)*ratio;
-      
-      note_freq = note[N_FREQ];
-      wavetable_freq = wavetable[0];
-      freqRatio = note_freq/wavetable_freq;
+	note[0] ? (
+		activecount += 1;
+		note[N_SAMPLESFROMSTART] > 0 ? (
+			amp = volume*note[N_VEL]/127;
+			note[N_SAMPLESFROMSTART] < attack ? (
+				amp *= note[N_SAMPLESFROMSTART]/attack;
+			);
+			note[N_SAMPLESFROMEND] > 0 ? (
+				note[N_SAMPLESFROMEND] > release ? (
+					amp = 0;
+					note[0] = 0;
+				) : (
+					amp *= 1 - (note[N_SAMPLESFROMEND]/release);
+				);
+			);
+			
+			wavetable = wavetables_start + note[N_WAVEINDEX]*wavetable_step;
+			wavetable_samples = wavetable + wavetable_headerlength;
+			midsample = note[N_SAMPLEPOS];
+			lowsample = floor(midsample);
+			highsample = ceil(midsample)%wavetable_sampleslength;
+			ratio = (midsample - lowsample);
 
-      midsample += freqRatio;
-      midsample > wavetable_sampleslength ? while (
-        midsample -= wavetable_sampleslength;
-        midsample > wavetable_sampleslength;
-      );
-      note[N_SAMPLEPOS] = midsample;
-      
-      spl0 += midvalue*amp;
-    );
+			lowvalueL = wavetable_samples[2*lowsample];
+			lowvalueR = wavetable_samples[2*lowsample + 1];
+			highvalueL = wavetable_samples[2*highsample];
+			highvalueR = wavetable_samples[2*highsample + 1];
+			midvalueL = lowvalueL + (highvalueL - lowvalueL)*ratio;
+			midvalueR = lowvalueR + (highvalueR - lowvalueR)*ratio;
+			
+			note_freq = note[N_FREQ];
+			wavetable_freq = wavetable[0];
+			freqRatio = note_freq/wavetable_freq;
 
-    note[N_SAMPLESFROMSTART] += 1;
-    note[N_SAMPLESFROMEND] += 1;
-  );
-  note += notes_step;
-  note < notes_end;
+			midsample += freqRatio;
+			midsample > wavetable_sampleslength ? while (
+				midsample -= wavetable_sampleslength;
+				midsample > wavetable_sampleslength;
+			);
+			note[N_SAMPLEPOS] = midsample;
+			
+			spl0 += midvalueL*amp;
+			spl1 += midvalueR*amp;
+		);
+
+		note[N_SAMPLESFROMSTART] += 1;
+		note[N_SAMPLESFROMEND] += 1;
+	);
+	note += notes_step;
+	note < notes_end;
 );
 

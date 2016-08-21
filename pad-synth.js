@@ -23,18 +23,34 @@ waveform.code([
 	'ui_wavetable = wavetables_start;',
 	'ui_wavetable_samples = ui_wavetable + wavetable_headerlength;',
 	'gi = 0;',
-	'gfx_r = gfx_b = gfx_g = 1;',
+	'gfx_r = 0.25;',
+	'gfx_g = 0.5;',
+	'gfx_b = 0.75;',
 	'gfx_x = box_left;',
 	'gfx_y = box_top + box_height/2;',
 	'while (',
-	'\tui_value = ui_wavetable_samples[gi];',
+	'\tui_value = ui_wavetable_samples[gi*2];',
+	'\tui_x = box_left + gi/wavetable_sampleslength*box_width;',
+	'\tui_y = box_top + 0.5*(1 - ui_value)*box_height;',
+	'\tgfx_lineto(ui_x, ui_y);',
+	'\tgi += 1;',
+	'\tgi < wavetable_sampleslength;',
+	');',
+	'gi = 0;',
+	'gfx_r = 0.75;',
+	'gfx_g = 0.5;',
+	'gfx_b = 0.25;',
+	'gfx_x = box_left;',
+	'gfx_y = box_top + box_height/2;',
+	'while (',
+	'\tui_value = ui_wavetable_samples[gi*2 + 1];',
 	'\tui_x = box_left + gi/wavetable_sampleslength*box_width;',
 	'\tui_y = box_top + 0.5*(1 - ui_value)*box_height;',
 	'\tgfx_lineto(ui_x, ui_y);',
 	'\tgi += 1;',
 	'\tgi < wavetable_sampleslength;',
 	');'
-], 'box_', {background: [0, 0, 0]});
+], 'box_', {background: [0.05, 0.05, 0.05]});
 
 var code = ui.toString();
 
