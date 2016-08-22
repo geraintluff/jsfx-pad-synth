@@ -7,44 +7,70 @@ var ui = new JsfxUi();
 var main = ui.screen('main');
 
 // Main
-var top = main.top('25', {line: true}).color(null, [1, 1, 1]).border();
-top.text('PadSynth').text('by Geraint Luff', {text: [0.5, 0.5, 0.5], align: 1});
+var top = main.top('25', {line: true});
+
+var aboutPage = top.subView('PadSynth');
+aboutPage.splitY(0.1);
+aboutPage.top(20).text('PadSynth');
+aboutPage.top(20).text('by Geraint Luff', {text: [0.5, 0.5, 0.5]});
+aboutPage.inset(40, 40).wrapText('This is a JSFX implementation of the "padsynth" algorithm from ZynAddSubFX, which I love but hasn\'t been updated in a while.  It\'s not a complete replacement, but I\'m adding features as I need them.\n\nIt\'s a sample-based synth, where the samples are designed in the frequency domain (which allows customised harmonic spread) and then generated using an inverse FFT.\n\nThe GUI for this synth is generated in JavaScript.');
+
 var body = main.inset(20, 10);
 var buttonBar = body.top(25).inset(0, 0, 0, 5);
 
-buttonBar.splitX(1/3).button('can_recompute', 'action_recompute = 1', 'action_recompute = 1;').text('Recompute');
-var adsr = buttonBar.splitX(0.5).subView('Envelope (ADSR)');
+var envelopePage = buttonBar.splitX(0.5).subView('Envelope (ADSR)');
 
-var group = adsr.splitY(0.5).inset(5).border();
+function sliderSet(host, sliders, extra) {
+	var remaining = sliders.length + (extra || 0);
+	[].concat(sliders).forEach(function (slider) {
+		var subHost = remaining > 1 ? (host.splitY(1/remaining)) : host;
+		remaining--;
+		var control = subHost;
+		control.left(80).inset(5).text(slider.name, {align: 1});
+		var display = control.right(80).inset(5, 0, 0, 0);
+		display.printf.apply(display, slider.printf);
+		control = control.inset(5);
+		control.hslider.apply(control, slider.slider);
+	});
+}
+var group = envelopePage.splitY(0.5).inset(5).border().inset(5);
 group.top(30).text('Amplitude');
-var control = group.top('25').inset(5);
-control.left(50).text('Attack');
-control.right(50).printf('%i ms', 'param_attack*1000 + 0.5');
-control.hslider('param_attack', 'power_to_slider', 'slider_to_power', null, [0.001, 1.5, 3]);
-var control = group.top('25').inset(5);
-control.left(50).text('Decay');
-control.right(50).printf('%i ms', 'param_decay*1000 + 0.5');
-control.hslider('param_decay', 'power_to_slider', 'slider_to_power', null, [0.01, 5, 3]);
-var control = group.top('25').inset(5);
-control.left(50).text('Sustain');
-control.right(50).printf('%i%%', 'param_sustain*100 + 0.5');
-control.hslider('param_sustain', 'range_to_slider', 'slider_to_range', null, [0, 1]);
-var control = group.top('25').inset(5);
-control.left(50).text('Release');
-control.right(50).printf('%i ms', 'param_release*1000 + 0.5');
-control.hslider('param_release', 'power_to_slider', 'slider_to_power', null, [0.005, 5, 3]);
-var control = group.top(40).inset(5);
-control.left(50);
-control.splitX(0.25).button('param_env_linear').text('Linear');
+sliderSet(group, [
+	{
+		name: 'Attack',
+		printf: ['%i ms', 'param_attack*1000 + 0.5'],
+		slider: ['param_attack', 'power_to_slider', 'slider_to_power', null, [0.001, 1.5, 3]]
+	},
+	{
+		name: 'Decay',
+		printf: ['%i ms', 'param_decay*1000 + 0.5'],
+		slider: ['param_decay', 'power_to_slider', 'slider_to_power', null, [0.001, 5, 3]]
+	},
+	{
+		name: 'Sustain',
+		printf: ['%i%%', 'param_sustain*100 + 0.5'],
+		slider: ['param_sustain', 'power_to_slider', 'slider_to_power', null, [0, 1, 1]]
+	},
+	{
+		name: 'Release',
+		printf: ['%i ms', 'param_release*1000 + 0.5'],
+		slider: ['param_release', 'power_to_slider', 'slider_to_power', null, [0.005, 5, 3]]
+	},
+], 1);
 
-var aboutPage = buttonBar.subView('About');
-aboutPage.splitY(0.3).text('About');
-aboutPage.wrapText('This is an implementation of the "padsynth" algorithm from ZynAddSubFX.  The samples are designed in the frequency domain (which allows customised harmonic spread) and then generated using an inverse FFT.\n\nThe GUI for this synth is generated in JavaScript.');
-aboutPage.text('Remainder');
+group.left(50);
+group.right(80).button('param_env_linear').text('Linear');
 
-var controllers = body.bottom(50).inset(5);
-controllers.right(50).printf('%i', 'floor(param_width_cents + 0.5)');
-controllers.hslider('param_width_cents', 'log_to_slider', 'slider_to_log', 'can_recompute = 1', [2, 200]);
+var footer = body.bottom(50).inset(5);
+footer.right(100).button('can_recompute', 'action_recompute = 1', 'action_recompute = 1;').text('Recompute');
+var controllers = footer.inset(5);
+sliderSet(controllers, [
+	{
+		name: 'Width (cents)',
+		printf: ['%i', 'floor(param_width_cents + 0.5)'],
+		slider: ['param_width_cents', 'power_to_slider', 'slider_to_power', 'can_recompute = 1', [5, 200, 3]]
+	}
+]);
 
 var waveform = body;
 waveform.code([
@@ -132,7 +158,6 @@ var genCode = source + '\n@serialize\n' + serializeCode + '\n@gfx\n' + gfxCode;
 var targetFile = process.argv[2];
 if (targetFile) {
 	fs.writeFileSync(targetFile, genCode);
-	console.log(genCode);
 } else {
 	process.stdout.write(genCode);
 }
