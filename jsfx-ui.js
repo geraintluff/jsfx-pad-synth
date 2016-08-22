@@ -30,7 +30,7 @@ function mergeOptions(root, child) {
 	return result;
 }
 
-function ScreenSwitcher(options) {
+function ScreenSwitcher(screenStackVar, screenCount, screenStep, options) {
 	if (!(this instanceof ScreenSwitcher)) return new ScreenSwitcher(options);
 
 	options = options || {};
@@ -42,20 +42,64 @@ function ScreenSwitcher(options) {
 	options.buttonTextOn = options.buttonTextOn || [1, 1, 1];
 	options.buttonTextOff = options.buttonTextOff || [0, 0, 0];
 	if (typeof options.align != 'number') options.align = 0.5;
+	if (typeof options.vAlign != 'number') options.vAlign = 0.5;
 	options._switcher = this;
 
 	var prefix = options.prefix = options.prefix || 'ui_'
 	options.tmp = prefix + 'tmp_';
-	var screenVar = prefix + 'screen';
+	var screenLevelVar = prefix + 'screen_level';
+	var screenVar = screenStackVar + '[' + screenLevelVar + '*' + screenStep + ']';
 	var clickVar = options.click = options.click || prefix + 'click';
 	var activeControlVar = options.activeControl = options.activeControl || prefix + 'active_control';
 	var texth = options.texth = options.texth || prefix + 'texth';
 	var wrapTextFunction = options.wrapText = options.wrapText || prefix + 'wrap_word';
-
+	var alignTextFunction = options.alignText = options.alignText || prefix + 'align_text';
+	var pushScreen = options.pushScreen = options.pushScreen || prefix + 'push_screen';
+	var popScreen = options.popScreen = options.popScreen || prefix + 'pop_screen';
+	var screenVars = options.screenVars = options.screenVars || prefix + 'current_screen';
+	
 	var screens = {};
 	var prefixCode = [
+		'function ' + screenVars + '() (',
+		indent([
+			screenStackVar + ' + ' + screenLevelVar + '*' + screenStep + ' + 1;'
+		]),
+		');',
+		'function ' + popScreen + '() (',
+		indent([screenLevelVar + ' > 0 ? ' + screenLevelVar + ' -= 1;']),
+		');',
+		'function ' + pushScreen + '(screen_id) local(i, screen) (',
+		indent([
+			// Leave an extra space so we can return a nonsense
+			screenLevelVar + ' + 2 < ' + screenCount + ' ? (',
+			indent([
+				screenLevelVar + ' += 1;',
+				'screen = ' + screenStackVar + ' + ' + screenLevelVar + '*' + screenStep + ';',
+				'i = 0;',
+				'while (',
+				indent([
+					'screen[i] = 0;',
+					'i < ' + screenStep
+				]),
+				');',
+				'screen[0] = screen_id;',
+				screenVars + '();'
+			]),
+			') : (',
+			indent([screenStackVar + ' + (' + screenCount + ' - 1)*' + screenStep + ' + 1;']),
+			');'
+		]),
+		');',
 		'gfx_clear = ' + rgbToClear(options.background) + ';',
 		'gfx_setfont(1, "Arial", 16);',
+		'function ' + alignTextFunction + '(text, left, top, width, height, alignX, alignY) local(text_w, text_h) (',
+		indent([
+			'gfx_measurestr(text, text_w, text_h);',
+			'gfx_x = left + (width - text_w)*alignX;',
+			'gfx_y = top + (height - text_h)*alignY;',
+			'gfx_drawstr(text);'
+		]),
+		');',
 		'function ' + wrapTextFunction + '(text, whitespace, box_left, box_right) local(text_w text_h) (',
 		indent([
 			'gfx_measurestr(text, text_w, text_h);',
@@ -98,8 +142,16 @@ function ScreenSwitcher(options) {
 	this.screen = function () {
 		var box = new DrawBox(0, 0, 'gfx_w', 'gfx_h', 'gfx_w', 'gfx_h');
 		var screenId = screenIdCounter++;
-		var showCode = screenVar + ' = ' + screenId + ';';
-		var screen = new Component(box, mergeOptions(options, {prefix: prefix + 'screen' + screenId + '_', _showCode: showCode}));
+		var screen = new Component(box, mergeOptions(options, {prefix: prefix + 'screen' + screenId + '_'}));
+		screen.open = function () {
+			var args = [].slice.call(arguments, 0);
+			var tmpScreen = options.tmp + 'screen';
+			var code = tmpScreen + ' = ' + pushScreen + '(' + screenId + ');';
+			args.forEach(function (arg, index) {
+				code += '\n' + tmpScreen + '[' + index + '] = ' + arg + ';'
+			});
+			return code;
+		};
 		screens[screenId] = screen;
 		return screen;
 	};
@@ -246,23 +298,22 @@ function Component(initBox, options) {
 		var opts = mergeOptions(options, extraOptions);
 		var box = this.box;
 		components.push(setColor(opts.text));
-		components.push(options.tmp + 'text = ' + expr + ';');
-		components.push('gfx_measurestr(' + options.tmp + 'text, ' + options.tmp + 'text_w, ' + options.tmp + 'text_h);');
-		components.push('gfx_x = ' + box.left + ' + (' + box.width + ' - ' + options.tmp + 'text_w)*' + opts.align + ';');
-		components.push('gfx_y = ' + box.top + ' + (' + box.height + ' - ' + options.tmp + 'text_h)/2;');
-		components.push('gfx_drawstr(' + options.tmp + 'text);');
+		components.push(opts.alignText + '(' + [expr, box.left, box.top, box.width, box.height, opts.align, 0.5].join(', ') + ');');
 		return this;
 	}
 	this.text = function (string, extraOptions) {
 		return this.textExpr(JSON.stringify(string), extraOptions);
 	};
 	this.printf = function (string) {
+		var extraOptions;
 		var args = [].slice.call(arguments, 1);
-		var box = this.box;
-		components.push('gfx_x = ' + box.left + ';');
-		components.push('gfx_y = ' + box.top + ' + (' + box.height + ' - gfx_texth)/2;');
-		components.push('gfx_printf(' + [JSON.stringify(string)].concat(args).join(', ') + ');');
-		return this;
+		if (args.length && typeof args[args.length - 1] === 'object') {
+			extraOptions = args.pop();
+		}
+		var tmpVar = options.tmp + 'text';
+		components.push(tmpVar + ' = #' + tmpVar + ';');
+		components.push('sprintf(' + [tmpVar, JSON.stringify(string)].concat(args).join(', ') + ');');
+		return this.textExpr(tmpVar, extraOptions);
 	};
 	this.wrapText = function (string, extraOptions) {
 		var box = this.box;
@@ -300,10 +351,7 @@ function Component(initBox, options) {
 			return test + ' ? ' + onText[i] + ':' + offText[i];
 		});
 		
-		var button = this.border(border).color(text, background);
-		var box = button.box;
-		components.push(button);
-		return button;
+		return this.border(border).color(text, background);
 	};
 	this.border = function (color, extraOptions) {
 		var opts = mergeOptions(options, extraOptions);
@@ -316,6 +364,9 @@ function Component(initBox, options) {
 		components.push('gfx_lineto(' + box.left + ', gfx_y);');
 		components.push('gfx_lineto(gfx_x, ' + box.top + ');');
 		return this.inset(1, 1, 1, 1, extraOptions);
+	};
+	this.actionButton = function (action, extraOptions) {
+		return this.button('0', action, '0', extraOptions);
 	};
 	this.button = function (test, turnOn, turnOff, extraOptions) {
 		if (!turnOn) turnOn = test + ' = 1';
@@ -365,9 +416,9 @@ function Component(initBox, options) {
 	this.subView = function (text, extraOptions) {
 		var opts = mergeOptions(options, extraOptions);
 		var screen = options._switcher.screen(text);
-		this.button('0', screen._showCode, '0', opts).text(text);
+		this.actionButton(screen.open(), opts).text(text);
 		var navBar = screen.top(this.texth + '*1.5').left(this.texth + '*10');
-		navBar.button('0', this._showCode, '0').text('< back');
+		navBar.actionButton(opts.popScreen + '()').text('< back');
 		return screen;
 	};
 	

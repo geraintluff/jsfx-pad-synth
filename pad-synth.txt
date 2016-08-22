@@ -13,7 +13,23 @@ polyphony = 64;
 fftblock = 0;
 fftblock_end = 65536;
 
-notes_start = fftblock_end;
+screen_stack = fftblock_end;
+screen_count = 10;
+screen_step = 10;
+screen_stack_end = screen_stack + screen_count*screen_step;
+
+note_fx_start = screen_stack_end;
+note_fx_count = 10;
+fx_headerlength = 3; // Type, name, N-mod
+fx_modspeclength = 3;
+FX_MOD_TYPE = 0;
+FX_MOD_RANGE = 1;
+FX_MOD_DESC = 2;
+fx_statelength = 32; // first N are modulatable parameters, the rest is internal state
+note_fx_step = fx_headerlength + fx_statelength;
+note_fx_end = note_fx_start + note_fx_step*note_fx_count;
+
+notes_start = note_fx_end;
 N_ACTIVE = 0;
 N_CHANNEL = 1;
 N_NOTE = 2;
@@ -54,7 +70,21 @@ wavetable_refsrate = 48000;
 wavetable_low = 50;
 wavetable_high = 4000;
 
-function reset_to_defaults() (
+FX_ID_ADSR = 1;
+function effect_init_adsr(effect) local(mods) (
+	effect[0] = FX_ID_ADSR;
+	effect[1] = "Envelope (ADSR)";
+	effect[2] = 0; // No modulatable parameters - TODO: add a 'stretch' in here, at least for decay
+
+	state = effect + fx_headerlength;
+	state[0] = 0.01; // Attack
+	state[1] = 0.3; // Decay
+	state[2] = 0.75; // Sustain
+	state[3] = 0.03; // Release
+	state[4] = 0; // Linear
+);
+
+function reset_to_defaults() local(i, note_effect) (
 	action_recompute = 1;
 	has_set_parameters = 1;
 	
@@ -64,6 +94,15 @@ function reset_to_defaults() (
 	param_sustain = 0.75;
 	param_release = 0.03;
 	param_env_linear = 0;
+	
+	i = 0;
+	while (
+		note_effect = note_fx_start + i*note_fx_step;
+		note_effect[0] = 0; // Disabled
+		i < note_fx_count;
+	);
+	note_effect = note_fx_start; // First slot
+	effect_init_adsr(note_effect);
 );
 !has_set_parameters ? reset_to_defaults();
 
@@ -230,6 +269,7 @@ midi_event ? while (
 			wavetable_index = min(wavetables_count - 1, max(0, floor(wavetable_index)));
 			note[N_WAVEINDEX] = wavetable_index; // Wavetable #0
 			note[N_SAMPLEPOS] = rand(wavetable_sampleslength);
+			display_wavetable_index = wavetable_index;
 		);
 	) : (midi_type == $x8 || (midi_type == $x9 && midi_msg3 == 0)) ? (
 		// Note off 

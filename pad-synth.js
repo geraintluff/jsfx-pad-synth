@@ -3,7 +3,7 @@ var JsfxUi = require('./jsfx-ui');
 
 var source = fs.readFileSync(__dirname + '/pad-synth.txt');
 
-var ui = new JsfxUi();
+var ui = new JsfxUi('screen_stack', 'screen_count', 'screen_step');
 var main = ui.screen('main');
 
 // Main
@@ -28,7 +28,7 @@ function sliderSet(host, sliders, extra) {
 		var control = subHost;
 		control.left(80).inset(5).text(slider.name, {align: 1});
 		var display = control.right(80).inset(5, 0, 0, 0);
-		display.printf.apply(display, slider.printf);
+		display.printf.apply(display, slider.printf.concat([{align: 0}]));
 		control = control.inset(5);
 		control.hslider.apply(control, slider.slider);
 	});
