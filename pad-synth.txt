@@ -5,11 +5,10 @@ out_pin:Right
 
 @init
 can_recompute = 0;
-action_recompute = 1;
-recompute_index = 10000;
+action_recompute = 0;
+// recompute_index - zero initially;
 recompute_chunk = 1;
 polyphony = 64;
-ext_noinit = 1;
 
 fftblock = 0;
 fftblock_end = 65536;
@@ -28,6 +27,13 @@ N_SAMPLEPOS = 9;
 
 notes_step = 32;
 notes_end = notes_start + polyphony*notes_step;
+// Clear all notes
+note = notes_start;
+while (
+	note[0] = 0;
+	note += notes_step;
+	note < notes_end;
+);
 
 wavetables_start = notes_end;
 wavetables_count = 18;
@@ -53,6 +59,7 @@ var_id = 0;
 file_var(0, param_width_cents);
 
 @block
+
 action_recompute ? (
 	can_recompute = 0;
 	action_recompute = 0;
