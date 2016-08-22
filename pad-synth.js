@@ -20,7 +20,7 @@ aboutPage.text('Remainder');
 
 var waveform = body;
 waveform.code([
-	'ui_wavetable = wavetables_start;',
+	'ui_wavetable = wavetables_start + display_wavetable_index*wavetable_step;',
 	'ui_wavetable_samples = ui_wavetable + wavetable_headerlength;',
 	'gi = 0;',
 	'gfx_r = 0.25;',
@@ -29,7 +29,7 @@ waveform.code([
 	'gfx_x = box_left;',
 	'gfx_y = box_top + box_height/2;',
 	'while (',
-	'\tui_value = ui_wavetable_samples[gi*2];',
+	'\tui_value = min(1, max(-1, ui_wavetable_samples[gi*2]));',
 	'\tui_x = box_left + gi/wavetable_sampleslength*box_width;',
 	'\tui_y = box_top + 0.5*(1 - ui_value)*box_height;',
 	'\tgfx_lineto(ui_x, ui_y);',
@@ -43,7 +43,7 @@ waveform.code([
 	'gfx_x = box_left;',
 	'gfx_y = box_top + box_height/2;',
 	'while (',
-	'\tui_value = ui_wavetable_samples[gi*2 + 1];',
+	'\tui_value = min(1, max(-1, ui_wavetable_samples[gi*2 + 1]));',
 	'\tui_x = box_left + gi/wavetable_sampleslength*box_width;',
 	'\tui_y = box_top + 0.5*(1 - ui_value)*box_height;',
 	'\tgfx_lineto(ui_x, ui_y);',
