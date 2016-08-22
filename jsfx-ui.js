@@ -48,14 +48,30 @@ function ScreenSwitcher(options) {
 	options.tmp = prefix + 'tmp_';
 	var screenVar = prefix + 'screen';
 	var clickVar = options.click = options.click || prefix + 'click';
+	var activeControlVar = options.activeControl = options.activeControl || prefix + 'active_control';
 	var texth = options.texth = options.texth || prefix + 'texth';
+	var wrapTextFunction = options.wrapText = options.wrapText || prefix + 'wrap_word';
 
 	var screens = {};
 	var prefixCode = [
 		'gfx_clear = ' + rgbToClear(options.background) + ';',
 		'gfx_setfont(1, "Arial", 16);',
+		'function ' + wrapTextFunction + '(text, whitespace, box_left, box_right) local(text_w text_h) (',
+		indent([
+			'gfx_measurestr(text, text_w, text_h);',
+			'gfx_x + text_w > box_right ? (',
+			indent([
+				'gfx_x = box_left;',
+				'gfx_y += gfx_texth;',
+			]),
+			');',
+			'gfx_drawstr(text);',
+			'gfx_drawstr(whitespace);'
+		]),
+		');',
 		texth + ' = gfx_texth;',
-		clickVar + ' = mouse_cap&(' + prefix + 'mouse_old~$xff);'
+		clickVar + ' = mouse_cap&(' + prefix + 'mouse_old~$xff);',
+		'!(mouse_cap&1) ? ' + activeControlVar + ' = 0;'
 	].join('\n') + '\n';
 	var suffixCode = [
 		'(',
@@ -87,9 +103,12 @@ function ScreenSwitcher(options) {
 		screens[screenId] = screen;
 		return screen;
 	};
-	var uniqueIdCounter = 0;
+	var uniqueIdCounter = 1;
 	this.uniqueVar = function () {
 		return prefix + 'var' + (uniqueIdCounter++);
+	};
+	this.uniqueValue = function () {
+		return uniqueIdCounter++;
 	};
 }
 
@@ -113,21 +132,36 @@ function DrawBox(left, top, width, height, right, bottom) {
 	this.right = right;
 	this.bottom = bottom;
 
+	this.setTop = function (top) {
+		return new DrawBox(left, top, width, subDimensions(bottom, top), right, bottom);
+	};
+
 	this.addTop = function (diff) {
 		return this.inset(0, diff, 0, 0);
 	};
-	this.setHeight = function (height) {
-		return new DrawBox(left, top, width, height, right, addDimensions(top, height));
-	};
-	this.setTop = function (top) {
-		return new DrawBox(left, top, width, subDimensions(bottom, top), right, bottom);
+	this.addBottom = function (diff) {
+		return this.inset(0, 0, 0, diff);
 	};
 	this.addLeft = function (diff) {
 		return this.inset(diff, 0, 0, 0);
 	};
+	this.addRight = function (diff) {
+		return this.inset(0, 0, diff, 0);
+	};
+
+	this.setHeight = function (height) {
+		return new DrawBox(left, top, width, height, right, addDimensions(top, height));
+	};
+	this.setHeightFromBottom = function (height) {
+		return new DrawBox(left, subDimensions(bottom, height), width, height, right, bottom);
+	};
 	this.setWidth = function (width) {
 		return new DrawBox(left, top, width, height, addDimensions(left, width), bottom);
 	};
+	this.setWidthFromRight = function (width) {
+		return new DrawBox(subDimensions(right, width), top, width, height, right, bottom);
+	};
+
 	this.inset = function (l, t, r, b) {
 		return new DrawBox(
 			addDimensions(left, l),
@@ -172,31 +206,31 @@ function Component(initBox, options) {
 		return this.top(ratio + '*' + this.box.height, extraOptions);
 	};
 	this.left = function (width, extraOptions) {
-		extraOptions = extraOptions || {};
-		var opts = mergeOptions(options, extraOptions);
 		var box = this.box;
-		var childBox = box.setWidth(width);
-		var child = new Component(childBox, opts);
+		var child = new Component(box.setWidth(width), mergeOptions(options, extraOptions));
 		components.push(child);
-		if (extraOptions.line) {
-			components.push(setColor(options.border));
-			components.push('gfx_line(' + [childBox.right, childBox.top, childBox.right, childBox.bottom].join(', ') + ');');
-		}
 		this.box = box.addLeft(width);
 		return child;
 	};
-	this.top = function (height, extraOptions) {
-		extraOptions = extraOptions || {};
-		var opts = mergeOptions(options, extraOptions);
+	this.right = function (width, extraOptions) {
 		var box = this.box;
-		var childBox = box.setHeight(height);
-		var child = new Component(childBox, opts);
+		var child = new Component(box.setWidthFromRight(width), mergeOptions(options, extraOptions));
 		components.push(child);
-		if (extraOptions.line) {
-			components.push(setColor(options.border));
-			components.push('gfx_line(' + [box.left, childBox.bottom, box.right, childBox.bottom].join(', ') + ');');
-		}
+		this.box = box.addRight(width);
+		return child;
+	};
+	this.top = function (height, extraOptions) {
+		var box = this.box;
+		var child = new Component(box.setHeight(height), mergeOptions(options, extraOptions));
+		components.push(child);
 		this.box = box.addTop(height);
+		return child;
+	};
+	this.bottom = function (height, extraOptions) {
+		var box = this.box;
+		var child = new Component(box.setHeightFromBottom(height), mergeOptions(options, extraOptions));
+		components.push(child);
+		this.box = box.addBottom(height);
 		return child;
 	};
 	this.inset = function (left, top, right, bottom, extraOptions) {
@@ -222,39 +256,32 @@ function Component(initBox, options) {
 	this.text = function (string, extraOptions) {
 		return this.textExpr(JSON.stringify(string), extraOptions);
 	};
-	this.wrapTextExprs = function (exprs, extraOptions) {
+	this.printf = function (string) {
+		var args = [].slice.call(arguments, 1);
 		var box = this.box;
-		var opts = mergeOptions(options, extraOptions);
-		components.push(setColor(opts.text));
 		components.push('gfx_x = ' + box.left + ';');
-		components.push('gfx_y = ' + box.top + ';');
-
-		exprs.forEach(function (expr) {
-			components.push(options.tmp + 'text = ' + expr + ';');
-			components.push('gfx_measurestr(' + options.tmp + 'text, ' + options.tmp + 'text_w, ' + options.tmp + 'text_h);');
-			components.push('gfx_x + ' + options.tmp + 'text_w > ' + box.right + ' ? (');
-			components.push(indent([
-				'gfx_x = ' + box.left + ';',
-				'gfx_y += gfx_texth'
-			]));
-			components.push(');');
-			components.push('gfx_printf(' + options.tmp + 'text);');
-		});
-		var bottomVar = options._switcher.uniqueVar();
-		components.push(bottomVar + ' = gfx_y + gfx_texth;');
-		
-		this.box = box.setTop(bottomVar);
+		components.push('gfx_y = ' + box.top + ' + (' + box.height + ' - gfx_texth)/2;');
+		components.push('gfx_printf(' + [JSON.stringify(string)].concat(args).join(', ') + ');');
 		return this;
 	};
 	this.wrapText = function (string, extraOptions) {
+		var box = this.box;
+		var opts = mergeOptions(options, extraOptions);
+		components.push(setColor(opts.text));
+		components.push('gfx_y = ' + box.top + ';');
+
+		components.push(options.tmp + 'left = ' + box.left + ';');
+		components.push(options.tmp + 'right = ' + box.right + ';');
 		string.split('\n').forEach(function (line) {
-			var parts = line.match(/[^\s]+(\s|$)/g);
-			if (!parts) {
-				thisComponent.box = thisComponent.box.addTop('gfx_texth');
-			} else {
-				return thisComponent.wrapTextExprs(parts.map(JSON.stringify), extraOptions);
-			}
+			components.push('gfx_x = ' + box.left + ';');
+			line.replace(/([^\s]+)(\s*)/g, function (match, word, whitespace) {
+				components.push(opts.wrapText + '(' + JSON.stringify(word) + ', ' + JSON.stringify(whitespace) + ', ' + options.tmp + 'left, ' + options.tmp + 'right);');
+			});
+			components.push('gfx_y += gfx_texth;');
 		});
+		var bottomVar = options._switcher.uniqueVar();
+		components.push(bottomVar + ' = gfx_y;');
+		this.box = box.setTop(bottomVar);
 		return this;
 	};
 	
@@ -288,7 +315,7 @@ function Component(initBox, options) {
 		components.push('gfx_lineto(gfx_x, ' + box.bottom + ' - 1);');
 		components.push('gfx_lineto(' + box.left + ', gfx_y);');
 		components.push('gfx_lineto(gfx_x, ' + box.top + ');');
-		return this.inset(1, 1, 1, 1, extraOptions)
+		return this.inset(1, 1, 1, 1, extraOptions);
 	};
 	this.button = function (test, turnOn, turnOff, extraOptions) {
 		if (!turnOn) turnOn = test + ' = 1';
@@ -307,6 +334,34 @@ function Component(initBox, options) {
 		components.push(');');
 		return indicator;
 	};
+	this.hslider = function (varName, readFunction, writeFunction, onchange, extraParams, extraOptions) {
+		var opts = mergeOptions(options, extraOptions);
+		var offBackground = opts.buttonOff || opts.background;
+		var onBackground = opts.buttonOn || opts.background;
+		var border = opts.buttonBorder || opts.border;
+
+		var slider = this.border(border).color(null, offBackground);
+		var box = slider.box;
+		var clickTest = '(' + options.click + '&1 && mouse_x >= ' + box.left + ' && mouse_x <= ' + box.right + ' && mouse_y >= ' + box.top + '&& mouse_y <= ' + box.bottom + ')';
+		
+		var ratioExpr = readFunction ? readFunction + '(' + [varName].concat(extraParams).join(', ') + ')' : varName;
+		var clickRatioExpr = 'max(0, min(1, (mouse_x - ' + box.left + ')/(' + box.width + ')))';
+		var assignExpr = writeFunction ? writeFunction + '(' + [clickRatioExpr].concat(extraParams).join(', ') + ')' : clickRatioExpr;
+		
+		components.push(slider);
+		components.push(setColor(onBackground));
+		components.push('gfx_rect(' + [box.left, box.top, 'floor(' + box.width + '*' + ratioExpr + ' + 0.5)', box.height].join(', ') + ');');
+		var controlId = opts._switcher.uniqueValue();
+		components.push(clickTest + ' ? ' + opts.activeControl + ' = ' + controlId + ';');
+		components.push(opts.activeControl + ' == ' + controlId + ' ? (');
+		components.push(indent([
+			varName + ' = ' + assignExpr + ';'
+		]));
+		if (onchange) components.push(indent([onchange]));
+		components.push(');');
+		return this;
+	};
+	
 	this.subView = function (text, extraOptions) {
 		var opts = mergeOptions(options, extraOptions);
 		var screen = options._switcher.screen(text);

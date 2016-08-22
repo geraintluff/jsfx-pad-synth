@@ -7,7 +7,7 @@ out_pin:Right
 can_recompute = 0;
 action_recompute = 0;
 // recompute_index - zero initially;
-recompute_chunk = 1;
+recompute_chunk = 10000;
 polyphony = 64;
 
 fftblock = 0;
@@ -42,6 +42,8 @@ wavetable_headerlength = 1; // Freq
 wavetable_step = wavetable_headerlength + wavetable_sampleslength*2;
 wavetables_end = wavetables_start + wavetables_count*wavetable_step;
 
+display_wavetable_index = floor(wavetables_count/2);
+
 volume_db = -12;
 volume = pow(10, volume_db/20);
 note_maxduration = srate*60*60*24*365;
@@ -52,11 +54,37 @@ wavetable_refsrate = 48000;
 wavetable_low = 50;
 wavetable_high = 4000;
 
-!param_width_cents ? param_width_cents = 20;
+function reset_to_defaults() (
+	action_recompute = 1;
+	has_set_parameters = 1;
+	
+	param_width_cents = 20;
+	param_attack = 0.01;
+	param_decay = 0.3;
+	param_sustain = 0.75;
+	param_release = 0.03;
+	param_env_linear = 0;
+);
+!has_set_parameters ? reset_to_defaults();
 
-@serialize
-var_id = 0;
-file_var(0, param_width_cents);
+function log_to_slider(value, low, high) (
+	log(value/low)/log(high/low);
+);
+function slider_to_log(value, low, high) (
+	exp(log(low) + log(high/low)*value);
+);
+function range_to_slider(value, low, high) (
+	(value - low)/(high - low);
+);
+function slider_to_range(value, low, high) (
+	low + (high - low)*value;
+);
+function power_to_slider(value, low, high, power) (
+	pow((value - low)/(high - low), 1/power);
+);
+function slider_to_power(value, low, high, power) (
+	low + (high - low)*pow(value, power);
+);
 
 @block
 
@@ -65,13 +93,11 @@ action_recompute ? (
 	action_recompute = 0;
 	recompute_index = 0;
 );
-	
+
 recompute_index < wavetables_count ? (
 	param_width = param_width_cents/1200*log(2);
 	wavetable_index = recompute_index;
-	display_wavetable_index = wavetable_index;
 	recompute_stop_index = min(wavetables_count, recompute_index + recompute_chunk);
-	recompute_index += 1;
 	while (
 		ratio = (wavetable_index + 0.5)/wavetables_count;
 		base_freq = exp(log(wavetable_low) + log(wavetable_high/wavetable_low)*ratio);
@@ -83,37 +109,58 @@ recompute_index < wavetables_count ? (
 			i < wavetable_sampleslength*2;
 		);
 		
-		harmonic_freq = base_freq;
+		harmonic_range_factor = exp(param_width*2);
+		i = 1;
 		while (
-			// Power pattern: 1/f
-			power = base_freq/harmonic_freq;
-			
-			lowindex = max(1, floor(harmonic_freq*exp(-param_width*2)*wavetable_sampleslength/wavetable_refsrate));
-			highindex = min(wavetable_sampleslength/2 - 1, ceil(harmonic_freq*pow(2, param_width_cents*4)*wavetable_sampleslength/wavetable_refsrate));
-			// TODO: some kind of sum to make sure we're actually giving the right amount of energy?
-			index = lowindex;
+			power = 0;
+			indexfreq = i/wavetable_sampleslength*wavetable_refsrate;
+			indexwidth = log((i + 1)/i);
+			harmonic_freq = base_freq*floor(indexfreq/base_freq/harmonic_range_factor);
+			end_freq = min(wavetable_maxfreq, indexfreq*harmonic_range_factor);
 			while (
-				index2 = wavetable_sampleslength - index;
-				indexfreq = index/wavetable_sampleslength*wavetable_refsrate;
-				width = param_width;
-				stddistance = log(indexfreq/harmonic_freq)*2/param_width;
-				amp = sqrt(power/harmonic_freq)*exp(-stddistance*stddistance); // Gaussian
-				phase1 = rand(2*$pi);
-				phase2 = rand(2*$pi);
-				
-				fftblock[2*index] += amp*cos(phase1);
-				fftblock[2*index + 1] += amp*sin(phase1);
-				fftblock[2*index2] += amp*cos(phase2);
-				fftblock[2*index2 + 1] += amp*sin(phase2);
-				index += 1;
-				index < highindex;
+				harmonic_amp = 1/harmonic_freq;
+				harmonic_power = harmonic_amp*harmonic_amp;
+				log_width = max(indexwidth, param_width);
+				hz_width = exp(log_width)*harmonic_freq;
+				stddistance = log(indexfreq/harmonic_freq)*2/log_width;
+				power += harmonic_power/hz_width*exp(-stddistance*stddistance); // Gaussian
+
+				harmonic_freq += base_freq;
+				harmonic_freq < end_freq;
 			);
+			amp = sqrt(power);
+			phase1 = rand(2*$pi);
+			//phase2 = rand(2*$pi);
+			// Attempt to even out the mid-channel energy while still making the two channels uncorrelated
+			phase2 = (rand() < 0.5) ? phase1 + $pi/2 : phase1 - $pi/2;
+	
+			leftR = amp*cos(phase1);
+			leftI = amp*sin(phase1);
+			rightR = amp*cos(phase2);
+			rightI = amp*sin(phase2);
 			
-			harmonic_freq += base_freq;
-			harmonic_freq < wavetable_maxfreq;
+			0 ? ( // Mid/side decode
+				mid = leftR;
+				side = rightR;
+				leftR = mid - side;
+				rightR = mid + side;
+				mid = leftI;
+				side = rightI;
+				leftI = mid - side;
+				rightI = mid + side;
+			);
+
+			i2 = wavetable_sampleslength - i;
+			fftblock[2*i] = leftR - rightI;
+			fftblock[2*i + 1] = leftI + rightR;
+			fftblock[2*i2] = leftR + rightI;
+			fftblock[2*i2 + 1] = rightR - leftI;
+
+			i += 1;
+			i < wavetable_sampleslength/2;
 		);
 		
-		// FFT
+		// IFFT
 		fft_ipermute(fftblock, 32768);
 		ifft(fftblock, 32768);
 
@@ -131,7 +178,7 @@ recompute_index < wavetables_count ? (
 
 		// Place in wavetable
 		wavetable = wavetables_start + wavetable_step*wavetable_index;
-		wavetable[0] = base_freq;//*srate/wavetable_refsrate;
+		wavetable[0] = base_freq*srate/wavetable_refsrate;
 		wavetable_samples = wavetable + wavetable_headerlength;
 		assignedwavetable = wavetable;
 		i = 0;
@@ -146,6 +193,7 @@ recompute_index < wavetables_count ? (
 		wavetable_index += 1;
 		wavetable_index < recompute_stop_index;
 	);
+	recompute_index = wavetable_index;
 );
 
 midi_event = midirecv(midi_offset, midi_msg1, midi_msg23);
@@ -175,7 +223,7 @@ midi_event ? while (
 			note[N_SAMPLESFROMSTART] = midi_offset;
 			note[N_SAMPLESFROMEND] = -note_maxduration;
 			note[N_FREQ] = 440*pow(2, (midi_msg2 - 69)/12);
-			note[N_AMP] = midi_msg3/127;
+			note[N_AMP] = volume*midi_msg3/127;
 			
 			// Wavetable params
 			wavetable_index = log(note[N_FREQ]/wavetable_low)/log(wavetable_high/wavetable_low)*wavetables_count;
@@ -200,8 +248,12 @@ midi_event ? while (
 
 polyphony_current = 0;
 note = notes_start;
+note_active_end = notes_start;
 while (
-	note[0] ? polyphony_current += 1;
+	note[0] ? (
+		polyphony_current += 1;
+		note_active_end = note + notes_step;
+	);
 	note += notes_step;
 	note < notes_end;
 );
@@ -209,25 +261,42 @@ while (
 @sample
 
 note = notes_start;
-attack = 0.01*srate;
-release = 0.02*srate;
-activecount = 0;
 while (
 	note[0] ? (
-		activecount += 1;
 		note[N_SAMPLESFROMSTART] > 0 ? (
-			amp = volume*note[N_VEL]/127;
-			note[N_SAMPLESFROMSTART] < attack ? (
-				amp *= note[N_SAMPLESFROMSTART]/attack;
-			);
-			note[N_SAMPLESFROMEND] > 0 ? (
-				note[N_SAMPLESFROMEND] > release ? (
-					amp = 0;
-					note[0] = 0;
+			secondsFromStart = note[N_SAMPLESFROMSTART]/srate;
+			secondsFromEnd = note[N_SAMPLESFROMEND]/srate;
+			note_freq = note[N_FREQ];
+			env = 1;
+			
+			stretch = param_env_linear ? 1 : 2;
+			attack = param_attack;
+			decay = param_decay*stretch;
+			sustain = param_sustain;
+			release = param_release*stretch;
+
+			secondsFromStart < attack ? (
+				env *= secondsFromStart/attack;
+			) : (
+				secondsFromAttack = secondsFromStart - attack;
+				secondsFromAttack < decay ? (
+					env *= 1 - (1 - sustain)*secondsFromAttack/decay;
 				) : (
-					amp *= 1 - (note[N_SAMPLESFROMEND]/release);
+					env *= sustain;
 				);
 			);
+			secondsFromEnd > 0 ? (
+				secondsFromEnd > release ? (
+					env = 0;
+					note[0] = 0;
+				) : (
+					env *= 1 - secondsFromEnd/release;
+				);
+			);
+			
+			!param_env_linear ? env = env*env*env;
+			
+			amp = env*note[N_AMP];
 			
 			wavetable = wavetables_start + note[N_WAVEINDEX]*wavetable_step;
 			wavetable_samples = wavetable + wavetable_headerlength;
@@ -243,7 +312,6 @@ while (
 			midvalueL = lowvalueL + (highvalueL - lowvalueL)*ratio;
 			midvalueR = lowvalueR + (highvalueR - lowvalueR)*ratio;
 			
-			note_freq = note[N_FREQ];
 			wavetable_freq = wavetable[0];
 			freqRatio = note_freq/wavetable_freq;
 
@@ -262,6 +330,6 @@ while (
 		note[N_SAMPLESFROMEND] += 1;
 	);
 	note += notes_step;
-	note < notes_end;
+	note < note_active_end;
 );
 
