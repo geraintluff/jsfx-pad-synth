@@ -136,6 +136,7 @@ function serializeVariables(varMap) {
 	code.push('\t\tread_var();\n');
 	code.push('\t\tfile_avail(0);\n');
 	code.push('\t);\n');
+	code.push('\taction_recompute = 1;\n');
 	code.push(') : (\n');
 	for (var key in varMap) {
 		code.push('\tvar_id = ' + varMap[key] + ';\n');
