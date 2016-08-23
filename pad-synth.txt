@@ -1,27 +1,26 @@
-desc:new effect
+desc:PadSynth
 in_pin:none;
 out_pin:Left
 out_pin:Right
+
+import ui-lib.jsfx-inc
 
 @init
 
 // can_recompute = 0;
 // action_recompute = 0;
 // recompute_index - zero initially;
-recompute_chunk = 10000;
+recompute_chunk = 1; // Recompute at most one waveform per block, so that we don't freeze the UI completely
 polyphony = 64;
 invsrate = 1/srate;
 
 fftblock = 0;
 fftblock_end = 65536;
 
-screen_stack = fftblock_end;
-screen_count = 10;
-screen_step = 10;
-screen_stack_end = screen_stack + screen_count*screen_step;
+uiblock_end = ui_setup(fftblock_end);
 
 // Description of all effects in the system
-fx_spec_start = screen_stack_end;
+fx_spec_start = uiblock_end;
 fx_spec_count = FX_SPECLIST_INDEX##;
 fx_spec_headerlength = FX_HEADER##;
 fx_spec_modlength = FX_MOD##;
@@ -476,3 +475,15 @@ while (
 	note < note_active_end;
 );
 
+@gfx
+
+ui_start("main"); // Default screen
+
+ui_screen() == "main" ? (
+	ui_split_top(50) + (
+		control_button("PadSynth") ? (
+			button_clicked = 1;
+			ui_screen_open("about");
+		);
+	) + ui_pop();
+) : ui_system();

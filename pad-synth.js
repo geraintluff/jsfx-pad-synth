@@ -165,11 +165,19 @@ var serializeCode = serializeVariables({
 	param_env_linear: 99
 });
 
-var genCode = source + '\n@serialize\n' + serializeCode + '\n@gfx\n' + gfxCode;
-genCode = require('./pre-processor')(genCode);
+var preProcess = require('./pre-processor');
+
+var genCode = source + '\n@serialize\n' + serializeCode;
+genCode = preProcess(genCode);
 var targetFile = process.argv[2];
 if (targetFile) {
 	fs.writeFileSync(targetFile, genCode);
 } else {
 	process.stdout.write(genCode);
+}
+var targetFile2 = process.argv[3];
+if (targetFile2) {
+	gfxLibCode = fs.readFileSync(__dirname + '/ui-lib.jsfx-inc', {encoding: 'utf-8'});
+	gfxLibCode = preProcess(gfxLibCode);
+	fs.writeFileSync(targetFile2, gfxLibCode);
 }

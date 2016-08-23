@@ -1,0 +1,449 @@
+@init
+uix_hassetup = 0;
+uix_screenstack = 0;
+uix_screenstack_step = 0;
+uix_screenstack_layercount = 10;
+uix_screenstack_currentlayer = 0;
+
+uix_drawconfig = 0;
+uix_drawconfig_step = uix_DRAWCONFIG##;
+uix_drawconfig_count = 100;
+uix_drawconfig_current = 0;
+uix_drawconfig_currentindex = -1;
+
+uix_mousecap_prev = 0;
+uix_click1 = uix_click2 = uix_click64 = 0;
+uix_unclick1 = uix_unclick2 = uix_unclick64 = 0;
+uix_click1_x = uix_click1_y = uix_click1_t = 0; // Left
+uix_click2_x = uix_click2_y = uix_click2_t = 0; // Right
+uix_click64_x = uix_click64_y = uix_click3_t = 0; // Middle
+
+uix_error = 0;
+function uix_clamp1(v) (
+	min(1, max(0, v));
+);
+function uix_clamp255(v) (
+	255*uix_clamp1(v);
+);
+function uix_setgfxcolorrgba(r, g, b, a) (
+	gfx_r = uix_clamp1(r/255);
+	gfx_g = uix_clamp1(g/255);
+	gfx_b = uix_clamp1(b/255);
+	gfx_a = uix_clamp1(a);
+);
+function uix_setgfxcolor() (
+	uix_setgfxcolorrgba(
+		uix_drawconfig_current[uix_DRAWCONFIG#RED],
+		uix_drawconfig_current[uix_DRAWCONFIG#GREEN],
+		uix_drawconfig_current[uix_DRAWCONFIG#BLUE],
+		uix_drawconfig_current[uix_DRAWCONFIG#ALPHA]
+	);
+);
+function uix_clearcolor(r, g, b) (
+	uix_clamp255(r) + 256*uix_clamp255(g) + 65536*uix_clamp255(b);
+);
+function uix_setgfxfont() (
+	gfx_getfont() != uix_drawconfig_current[uix_DRAWCONFIG#FONTINDEX] ? (
+		gfx_setfont(
+			uix_drawconfig_current[uix_DRAWCONFIG#FONTINDEX],
+			uix_drawconfig_current[uix_DRAWCONFIG#FONTFACE],
+			uix_drawconfig_current[uix_DRAWCONFIG#FONTSIZE],
+			uix_drawconfig_current[uix_DRAWCONFIG#FONTFLAGS]
+		);
+	);
+);
+
+function ui_error(string) (
+	uix_screenstack_currentlayer = 0;
+	uix_screenstack[0] = "error";
+	uix_error = uix_screenstack[1] = string;
+	0;
+);
+
+function ui_screen() (
+	uix_hassetup
+		? (uix_screenstack + uix_screenstack_step*uix_screenstack_currentlayer)[0]
+		: "error";
+);
+
+function ui_screen_open(id) local(i, screen) (
+	uix_screenstack_currentlayer += 1;
+	uix_screenstack_currentlayer < uix_screenstack_layercount ? (
+		screen = (uix_screenstack + uix_screenstack_step*uix_screenstack_currentlayer);
+		screen[0] = id;
+		i = 1;
+		while (
+			screen[i] = 0;
+			i += 1;
+			i < uix_screenstack_step;
+		);
+	) : ui_error("Too many screens - only 10 dialogs deep")
+);
+
+function ui_screen_get(index) local(screen) (
+	screen = (uix_screenstack + uix_screenstack_step*uix_screenstack_currentlayer);
+	offset = index + 1;
+	offset < uix_screenstack_step ? (
+		screen[offset];
+	) : (
+		ui_error("Screens only have 10 arguments");
+	);
+);
+
+function ui_screen_set(index, value) local(screen, offset) (
+	screen = (uix_screenstack + uix_screenstack_step*uix_screenstack_currentlayer);
+	offset = index + 1;
+	offset < uix_screenstack_step ? (
+		screen[offset] = value;
+	) : (
+		ui_error("Screens only have 10 arguments");
+	);
+);
+
+function ui_setup(stackstart) local(uix_screenstack_end, uix_drawconfig_end) (
+	uix_hassetup = 1;
+	
+	uix_screenstack = stackstart;
+	uix_screenstack_step = varcount + 1;
+	uix_screenstack_layercount = layercount ? layercount : 10;
+	uix_screenstack_end = stackstart + uix_screenstack_step*uix_screenstack_layercount;
+	
+	uix_drawconfig = uix_screenstack_end;
+	uix_drawconfig_end = uix_drawconfig + uix_drawconfig_step*uix_drawconfig_count;
+	uix_drawconfig_end;
+);
+
+function ui_start(defaultScreen) local(i, click) (
+	uix_hassetup ? (
+		!ui_screen() ? (
+			uix_screenstack_currentlayer = 0;
+			i = 0;
+			while (
+				uix_screenstack[i] = 0;
+				i += 1;
+				i < uix_screenstack_step;
+			);
+			uix_screenstack[0] = defaultScreen;
+		);
+		uix_drawconfig_currentindex = 0;
+		uix_drawconfig_current = uix_drawconfig;
+		// Default colours
+		gfx_clear = uix_clearcolor(242, 242, 242);
+		
+		uix_drawconfig_current[uix_DRAWCONFIG#RED] = 0;
+		uix_drawconfig_current[uix_DRAWCONFIG#GREEN] = 0;
+		uix_drawconfig_current[uix_DRAWCONFIG#BLUE] = 0;
+		uix_drawconfig_current[uix_DRAWCONFIG#ALPHA] = 1;
+
+		uix_drawconfig_current[uix_DRAWCONFIG#LEFT] = 0;
+		uix_drawconfig_current[uix_DRAWCONFIG#TOP] = 0;
+		uix_drawconfig_current[uix_DRAWCONFIG#WIDTH] = gfx_w;
+		uix_drawconfig_current[uix_DRAWCONFIG#HEIGHT] = gfx_h;
+		uix_drawconfig_current[uix_DRAWCONFIG#HALIGN] = 0.5;
+		uix_drawconfig_current[uix_DRAWCONFIG#VALIGN] = 0.5;
+
+		uix_drawconfig_current[uix_DRAWCONFIG#FONTINDEX] = 1;
+		uix_drawconfig_current[uix_DRAWCONFIG#FONTFACE] = "Arial";
+		uix_drawconfig_current[uix_DRAWCONFIG#FONTSIZE] = 16;
+		uix_drawconfig_current[uix_DRAWCONFIG#FONTFLAGS] = "";
+		
+		gfx_setfont(1, "Arial", 16);
+
+		uix_unclick1 = (!mouse_cap&1 && uix_mousecap_prev&1);
+		uix_click1 = (mouse_cap&1 && !uix_mousecap_prev&1) ? (
+			uix_click1 = 1;
+			uix_click1_x = mouse_x;
+			uix_click1_y = mouse_y;
+			uix_click1_t = time_precise() - 0.001;
+		);
+		uix_unclick2 = (!mouse_cap&2 && uix_mousecap_prev&2);
+		uix_click2 = (mouse_cap&2 && !uix_mousecap_prev&2) ? (
+			uix_click2 = 1;
+			uix_click2_x = mouse_x;
+			uix_click2_y = mouse_y;
+			uix_click2_t = time_precise() - 0.001;
+		);
+		uix_unclick64 = (!mouse_cap&64 && uix_mousecap_prev&64);
+		uix_click64 = (mouse_cap&64 && !uix_mousecap_prev&64) ? (
+			uix_click64 = 1;
+			uix_click64_x = mouse_x;
+			uix_click64_y = mouse_y;
+			uix_click64_t = time_precise() - 0.001;
+		);
+		uix_mousecap_prev = mouse_cap;
+	) : (
+		uix_error = "ui_setup() has not been called";
+	);
+);
+
+function ui_system() local(text, error) (
+	ui_screen() == "error" ? (
+		gfx_clear = 255 + 255*256 + 255*65536;
+		gfx_r = 64;
+		gfx_g = gfx_b = 0;
+		gfx_x = gfx_y = gfx_texth;
+		error = uix_error ? uix_error : uix_screenstack[1];
+		strlen(error) ? (
+			gfx_printf("Error: %s\n(%f)", error, error);
+		) : (
+			gfx_printf("Error: #%s", error);
+		);
+	) : (
+		gfx_clear = 255 + 255*256 + 255*65536;
+		gfx_r = gfx_g = gfx_b = 0;
+		gfx_x = gfx_y = gfx_texth;
+		ui_screen() ? (
+			gfx_printf("Unknown screen: %s (%f)", ui_screen(), ui_screen());
+			uix_click1 ? (
+				uix_screenstack_currentlayer = -1;
+				ui_screen_open(0);
+			);
+		) : (
+			gfx_drawstr("Current screen is 0 - are you calling ui_start() first?");
+		);
+	);
+);
+
+function ui_left() (
+	uix_drawconfig_current[uix_DRAWCONFIG#LEFT];
+);
+function ui_top() (
+	uix_drawconfig_current[uix_DRAWCONFIG#TOP];
+);
+function ui_width() (
+	uix_drawconfig_current[uix_DRAWCONFIG#WIDTH];
+);
+function ui_height() (
+	uix_drawconfig_current[uix_DRAWCONFIG#HEIGHT];
+);
+function ui_bottom() (
+	uix_drawconfig_current[uix_DRAWCONFIG#TOP] + uix_drawconfig_current[uix_DRAWCONFIG#HEIGHT];
+);
+function ui_right() (
+	uix_drawconfig_current[uix_DRAWCONFIG#LEFT] + uix_drawconfig_current[uix_DRAWCONFIG#WIDTH];
+);
+
+///// Viewport stack operations /////
+
+function ui_push() local(i, oldlayer) (
+	uix_drawconfig_currentindex += 1;
+	uix_drawconfig_currentindex < uix_drawconfig_count ? (
+		i = 0;
+		oldlayer = uix_drawconfig_current;
+		uix_drawconfig_current = uix_drawconfig + uix_drawconfig_currentindex*uix_drawconfig_step;
+		while (
+			uix_drawconfig_current[i] = oldlayer[i];
+			i += 1;
+			i < uix_drawconfig_step;
+		);
+		1;
+	);
+	0;
+);
+function ui_pop() (
+	uix_drawconfig_currentindex > 0 ? (
+		uix_drawconfig_currentindex -= 1;
+		uix_drawconfig_current = uix_drawconfig + uix_drawconfig_currentindex*uix_drawconfig_step;
+		1;
+	);
+	0;
+);
+function ui_split_top(height) local(oldTop) (
+	oldTop = uix_drawconfig_current[uix_DRAWCONFIG#TOP];
+	uix_drawconfig_current[uix_DRAWCONFIG#TOP] += height;
+	uix_drawconfig_current[uix_DRAWCONFIG#HEIGHT] -= height;
+	ui_push();
+	uix_drawconfig_current[uix_DRAWCONFIG#TOP] = oldTop;
+	uix_drawconfig_current[uix_DRAWCONFIG#HEIGHT] = height;
+);
+function ui_split_topratio(ratio) (
+	ui_split_top(ratio*ui_height());
+);
+function ui_split_bottom(height) local(bottom) (
+	bottom = uix_drawconfig_current[uix_DRAWCONFIG#TOP] + uix_drawconfig_current[uix_DRAWCONFIG#HEIGHT];
+	uix_drawconfig_current[uix_DRAWCONFIG#HEIGHT] -= height;
+	ui_push();
+	uix_drawconfig_current[uix_DRAWCONFIG#TOP] = bottom - height;
+	uix_drawconfig_current[uix_DRAWCONFIG#HEIGHT] = height;
+);
+function ui_split_bottomratio(ratio) (
+	ui_split_bottom(ratio*ui_height());
+);
+function ui_split_left(width) local(oldLeft) (
+	oldLeft = uix_drawconfig_current[uix_DRAWCONFIG#LEFT];
+	uix_drawconfig_current[uix_DRAWCONFIG#LEFT] += width;
+	uix_drawconfig_current[uix_DRAWCONFIG#WIDTH] -= width;
+	ui_push();
+	uix_drawconfig_current[uix_DRAWCONFIG#LEFT] = oldLeft;
+	uix_drawconfig_current[uix_DRAWCONFIG#WIDTH] = width;
+);
+function ui_split_leftratio(ratio) (
+	ui_split_left(ratio*ui_width());
+);
+function ui_split_right(width) local(right) (
+	right = uix_drawconfig_current[uix_DRAWCONFIG#LEFT] + uix_drawconfig_current[uix_DRAWCONFIG#WIDTH];
+	uix_drawconfig_current[uix_DRAWCONFIG#WIDTH] -= width;
+	ui_push();
+	uix_drawconfig_current[uix_DRAWCONFIG#LEFT] = right - width;
+	uix_drawconfig_current[uix_DRAWCONFIG#WIDTH] = width;
+);
+function ui_split_rightratio(ratio) (
+	ui_split_right(ratio*ui_width());
+);
+
+/////// Drawing operations ///////
+
+function ui_color(r, g, b) (
+	uix_drawconfig_current[uix_DRAWCONFIG#RED] = r;
+	uix_drawconfig_current[uix_DRAWCONFIG#GREEN] = g;
+	uix_drawconfig_current[uix_DRAWCONFIG#BLUE] = b;
+	uix_drawconfig_current[uix_DRAWCONFIG#ALPHA] = 1;
+);
+
+function ui_fill(r, g, b) (
+	uix_setgfxcolorrgba(r, g, b, 1);
+	gfx_rect(ui_left(), ui_top(), ui_right(), ui_bottom());
+);
+
+function ui_align(halign, valign) (
+	uix_drawconfig_current[uix_DRAWCONFIG#HALIGN] = halign;
+	uix_drawconfig_current[uix_DRAWCONFIG#VALIGN] = valign;
+);
+
+function ui_text(text) local (text_h, text_w, boxwidth, boxheight, valign, halign, fontscale, fontsize) (
+	uix_setgfxcolor();
+	uix_setgfxfont();
+	valign = uix_drawconfig_current[uix_DRAWCONFIG#VALIGN];
+	halign = uix_drawconfig_current[uix_DRAWCONFIG#HALIGN];
+	
+	gfx_measurestr(text, text_w, text_h);
+	
+	boxwidth = ui_width();
+	boxheight = ui_height();
+	
+	fontscale = 1;
+	text_w > boxwidth ? (
+		fontscale = boxwidth/text_w;
+	);
+	text_h > boxheight ? (
+		fontscale = min(boxheight/text_h, fontscale);
+	);
+	uix_debug.text_w = text_w;
+	uix_debug.text_h = text_h;
+	uix_debug.boxwidth = boxwidth;
+	uix_debug.boxheight = boxheight;
+	uix_debug.fontscale = fontscale;
+	
+	fontscale != 1 ? (
+		fontsize = max(8, floor(fontscale*uix_drawconfig_current[uix_DRAWCONFIG#FONTSIZE]));
+		uix_debug.fontsize = fontsize;
+		uix_debug.originalfontsize = uix_drawconfig_current[uix_DRAWCONFIG#FONTSIZE];
+		gfx_setfont(
+			16,
+			uix_drawconfig_current[uix_DRAWCONFIG#FONTFACE],
+			fontsize,
+			uix_drawconfig_current[uix_DRAWCONFIG#FONTFLAGS]
+		);
+	);
+	
+	valign = uix_drawconfig_current[uix_DRAWCONFIG#VALIGN];
+	halign = uix_drawconfig_current[uix_DRAWCONFIG#HALIGN];
+	gfx_x = ui_left() + (boxwidth - text_w*fontscale)*halign;
+	gfx_y = ui_top() + (boxheight - text_h*fontscale)*valign;
+	uix_debug.gfx_x = gfx_x;
+	uix_debug.gfx_y = gfx_y;
+	
+	gfx_drawstr(text);
+);
+
+function ui_border_top() (
+	uix_setgfxcolor();
+	gfx_line(ui_left(), ui_top(), ui_right(), ui_top());
+);
+
+function ui_border_bottom() (
+	uix_setgfxcolor();
+	gfx_line(ui_left(), ui_bottom(), ui_right(), ui_bottom());
+);
+
+function ui_border_left() (
+	uix_setgfxcolor();
+	gfx_line(ui_left(), ui_top(), ui_left(), ui_bottom());
+);
+
+function ui_border_right() (
+	uix_setgfxcolor();
+	gfx_line(ui_right(), ui_top(), ui_right(), ui_bottom());
+);
+
+function ui_border() (
+	uix_setgfxcolor();
+	gfx_x = ui_left();
+	gfx_y = ui_top();
+	gfx_lineto(gfx_x + ui_width() - 1, gfx_y);
+	gfx_lineto(gfx_x, gfx_y + ui_height() - 1);
+	gfx_lineto(ui_left(), gfx_y);
+	gfx_lineto(gfx_x, ui_top());
+	uix_drawconfig_current[uix_DRAWCONFIG#TOP] += 1;
+	uix_drawconfig_current[uix_DRAWCONFIG#LEFT] += 1;
+	uix_drawconfig_current[uix_DRAWCONFIG#HEIGHT] -= 2;
+	uix_drawconfig_current[uix_DRAWCONFIG#WIDTH] -= 2;
+);
+
+function uix_click1wasinside() (
+	uix_click1_x >= ui_left() && uix_click1_x < ui_right() && uix_click1_y >= ui_top() && uix_click1_y < ui_bottom();
+);
+
+function ui_hover() (
+	mouse_x >= ui_left() && mouse_x < ui_right() && mouse_y >= ui_top() && mouse_y < ui_bottom();
+);
+
+function ui_mousedown() (
+	uix_click1 && ui_hover();
+);
+
+function ui_mouseup() (
+	uix_unclick1 && ui_hover();
+);
+
+function ui_click_clear() (
+	uix_click1 = uix_click2 = uix_click64 = 0;
+	uix_unclick1 = uix_unclick2 = uix_unclick64 = 0;
+);
+
+function ui_drag() (
+	mouse_cap&1 && uix_click1wasinside() ? (
+		time_precise() - uix_click1_t;
+	) : 0;
+);
+
+function ui_press() (
+	ui_hover() ? ui_drag() : 0;
+);
+
+function ui_click() (
+	ui_mouseup() && uix_click1wasinside() && ui_hover() ? (
+		time_precise() - uix_click1_t;
+	) : 0;
+);
+
+/////////////// LEVEL 2 ///////////////
+
+function control_button(text) local(click, shade) (
+	ui_push();
+		shade = ui_press() ? 200 : ui_drag() ? 240 : 255;
+		ui_fill(shade, shade, shade);
+		
+		ui_color(0, 0, 0);
+		ui_border_bottom();
+		ui_text(text);
+		ui_color(128, 128, 128);
+		ui_border();
+		click = ui_click();
+		debug.ui_mouseup += ui_mouseup();
+		debug.ui_press += ui_press();
+		debug.ui_pressmouseup += ui_press()*ui_mouseup();
+		debug.ui_click += click;
+	ui_pop();
+	click;
+);
