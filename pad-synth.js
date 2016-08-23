@@ -12,7 +12,7 @@ var body = main.inset(20, 10);
 var buttonBar = body.top(25).inset(0, 0, 0, 5);
 
 buttonBar.splitX(0.5).actionButton(ui.openScreen('envelope')).text('Envelope (ADSR)');
-buttonBar.actionButton(ui.openScreen({code: '(fx_spec_start + (fx_list_start + 0*fx_list_step)[FX_INDEX]*fx_spec_step)[FX_SPEC_SCREEN]'})).text('LFO');
+buttonBar.actionButton(ui.openScreen({code: '(fx_spec_start + (fx_list_start + 0*fx_list_step)[FX#INDEX]*fx_spec_step)[FX_HEADER#SPEC_SCREEN]'}, '(fx_list_start + 0*fx_list_step)')).text('LFO');
 
 var envelopePage = ui.screen('envelope');
 addBackButton(envelopePage);

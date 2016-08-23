@@ -34,6 +34,14 @@ function ScreenSwitcher(screenStackVar, screenCount, screenStep, options) {
 	if (!(this instanceof ScreenSwitcher)) return new ScreenSwitcher(options);
 	var thisSwitcher = this;
 
+	var uniqueIdCounter = 1;
+	this.uniqueVar = function () {
+		return prefix + 'var' + (uniqueIdCounter++);
+	};
+	this.uniqueValue = function () {
+		return uniqueIdCounter++;
+	};
+
 	options = options || {};
 	options.background = options.background || [0.95, 0.95, 0.95];
 	options.text = options.text || [0, 0, 0];
@@ -59,6 +67,7 @@ function ScreenSwitcher(screenStackVar, screenCount, screenStep, options) {
 	var popScreen = options.popScreen = options.popScreen || prefix + 'pop_screen';
 	var screenSetVar = options.screenSetVar = options.screenSetVar || prefix + 'screen_set';
 	var screenGetVar = options.screenGetVar = options.screenGetVar || prefix + 'screen_get';
+	this.texth = texth;
 	
 	var defaultScreen = 0;
 	var screens = {};
@@ -126,14 +135,26 @@ function ScreenSwitcher(screenStackVar, screenCount, screenStep, options) {
 		clickVar + ' = mouse_cap&(' + prefix + 'mouse_old~$xff);',
 		'!(mouse_cap&1) ? ' + activeControlVar + ' = 0;'
 	].join('\n') + '\n';
+	var counterVar = this.uniqueVar();
 	var suffixCode = [
 		'(',
 		indent([
 			'gfx_x = gfx_y = gfx_texth;',
 			setColor(options.text),
 			'gfx_drawstr("Invalid screen: ");',
-			'gfx_drawnumber(' + screenVar + ', 5);',
-			clickVar + '&1 ? ' + screenLevelVar + ' = ' + screenVar + ' = 0;'
+			'gfx_printf("%s (%f)", ' + screenVar + ', ' + screenVar + ');',
+			clickVar + '&1 ? ' + screenLevelVar + ' = ' + screenVar + ' = 0;',
+			counterVar + ' = 0;',
+			'while (',
+			indent([
+				'gfx_x = gfx_texth;',
+				'gfx_y += gfx_texth;',
+				'gfx_printf("%f", ' + screenGetVar + '(' + counterVar + '));',
+				counterVar + ' += 1;',
+				counterVar + ' < ' + screenStep + ';'
+			]),
+			');',
+			'gfx_y += gfx_texth;'
 		]),
 		');',
 		prefix + 'mouse_old = mouse_cap;'
@@ -157,9 +178,9 @@ function ScreenSwitcher(screenStackVar, screenCount, screenStep, options) {
 		}
 		var args = [].slice.call(arguments, 1);
 		var tmpScreen = options.tmp + 'screen';
-		var code = tmpScreen + ' = ' + pushScreen + '(' + screenId + ');';
+		var code = pushScreen + '(' + screenId + ');';
 		args.forEach(function (arg, index) {
-			code += '\n' + tmpScreen + '[' + index + '] = ' + arg + ';'
+			code += '\n' + screenSetVar + '(' + index + ', ' + arg + ');';
 		});
 		return code;
 	};
@@ -173,7 +194,7 @@ function ScreenSwitcher(screenStackVar, screenCount, screenStep, options) {
 		var screen = new Component(box, mergeOptions(options, {prefix: prefix + 'screen' + screenId + '_'}));
 		screen.open = function () {
 			var args = [].slice.call(arguments, 0);
-			return thisSwitcher.openScreen([screenId].concat(args));
+			return thisSwitcher.openScreen,apply(thisSwitcher, [screenId].concat(args));
 		};
 		screen.close = function () {
 			return popScreen + '()';
@@ -181,14 +202,6 @@ function ScreenSwitcher(screenStackVar, screenCount, screenStep, options) {
 		screens[screenId] = screen;
 		return screen;
 	};
-	var uniqueIdCounter = 1;
-	this.uniqueVar = function () {
-		return prefix + 'var' + (uniqueIdCounter++);
-	};
-	this.uniqueValue = function () {
-		return uniqueIdCounter++;
-	};
-	this.texth = texth;
 }
 
 function addDimensions(a, b) {

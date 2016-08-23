@@ -22,47 +22,22 @@ screen_stack_end = screen_stack + screen_count*screen_step;
 
 // Description of all effects in the system
 fx_spec_start = screen_stack_end;
-fx_spec_count = 10;
-fx_spec_headerlength = 4; // Name, N-mod, UI screen name, initFunc
-FX_SPEC_NAME = 0;
-FX_SPEC_MODCOUNT = 1;
-FX_SPEC_SCREEN = 2;
-FX_SPEC_INITFUNC = 3;
-fx_spec_modlength = 3;
-FX_MOD_NAME = 0;
-FX_MOD_TYPE = 1;
-FX_MOD_TYPE_ADD = 0;
-FX_MOD_TYPE_MULT = 1;
-FX_MOD_RANGE = 2;
+fx_spec_count = FX_SPECLIST_INDEX##;
+fx_spec_headerlength = FX_HEADER##;
+fx_spec_modlength = FX_MOD##;
 fx_spec_var_count = 10; // Maximum number of modulatable parameters
 fx_spec_step = fx_spec_headerlength + fx_spec_modlength*fx_spec_var_count;
 fx_spec_end = fx_spec_start + fx_spec_step*fx_spec_count;
 
 fx_list_start = fx_spec_end;
 fx_list_count = 10;
-fx_list_headerlength = 3; // enabled, type, name
-FX_ENABLED = 0;
-FX_INDEX = 1;
-FX_NAME = 2;
+fx_list_headerlength = FX##; // enabled, type, name
 fx_list_statelength = 16;
 fx_list_step = fx_list_headerlength + fx_list_statelength;
 fx_list_end = fx_list_start + fx_list_step*fx_list_count;
 
 notes_start = fx_list_end;
-note_headerlength = 16;
-N_ACTIVE = 0;
-N_CHANNEL = 1;
-N_NOTE = 2;
-N_VEL = 3;
-N_SECONDSFROMSTART = 4;
-N_SECONDSFROMEND = 5;
-N_FREQ_BASE = 6;
-N_AMP_BASE = 7;
-N_WAVEINDEX = 8;
-N_SAMPLEPOS = 9;
-// Automatable
-N_FREQ = 10;
-N_AMP = 11;
+note_headerlength = NOTE#;
 
 note_fx_statelength = fx_list_statelength;
 notes_step = note_headerlength + note_fx_statelength*fx_list_count;
@@ -70,7 +45,7 @@ notes_end = notes_start + polyphony*notes_step;
 // Clear all notes
 note = notes_start;
 while (
-	note[0] = 0;
+	note[NOTE#ACTIVE] = 0;
 	note += notes_step;
 	note < notes_end;
 );
@@ -94,28 +69,27 @@ wavetable_refsrate = 48000;
 wavetable_low = 50;
 wavetable_high = 4000;
 
-FX_INDEX_LFO = 0;
-effectspec = fx_spec_start + fx_spec_count*FX_INDEX_LFO;
-effectspec[FX_SPEC_NAME] = "LFO";
-effectspec[FX_SPEC_MODCOUNT] = 2;
-effectspec[FX_SPEC_SCREEN] = "effect.lfo";
+effectspec = fx_spec_start + fx_spec_count*FX_SPECLIST_INDEX#LFO;
+effectspec[FX_HEADER#NAME] = "LFO";
+effectspec[FX_HEADER#MODCOUNT] = 2;
+effectspec[FX_HEADER#SPEC_SCREEN] = "effect.lfo";
 modspec = effectspec + fx_spec_headerlength;
-modspec[FX_MOD_NAME] = "Frequency";
-modspec[FX_MOD_TYPE] = FX_MOD_TYPE_ADD;
-modspec[FX_MOD_RANGE] = 2;
+modspec[FX_MOD#NAME] = "Frequency";
+modspec[FX_MOD#TYPE] = FX_MODTYPE#ADD;
+modspec[FX_MOD#RANGE] = 2;
 
-effectspec[FX_SPEC_INITFUNC] = {effect_init}effect_init_lfo;
+effectspec[FX_HEADER#FUNC_INIT] = {effect_init}effect_init_lfo;
 function effect_init_lfo(effect) local(mods, state) (
-	effect[0] = 1;
-	effect[1] = FX_INDEX_LFO;
-	effect[2] = "LFO Modulator";
+	effect[FX#ENABLED] = 1;
+	effect[FX#INDEX] = FX_SPECLIST_INDEX#LFO;
+	effect[FX#NAME] = "LFO Modulator";
 	
 	state = effect + fx_list_headerlength;
 	state[0] = -1; // Initial target: note itself
 	state[1] = 1; // Note amplitude
-	state[2] = FX_MOD_TYPE_MULT;
+	state[2] = FX_MODTYPE#MULT;
 	
-	state[3] = 10; // Freq
+	state[3] = 5; // Freq
 	state[4] = 0.5; // Amp
 );
 function effect_swap_lfo(effect, fxIndex1, fxIndex2) (
@@ -129,7 +103,7 @@ function effect_swap_lfo(effect, fxIndex1, fxIndex2) (
 	state[0] < -1 ? (
 		state[0] = -1;
 		state[1] = 1;
-		state[2] = FX_MOD_TYPE_MULT;
+		state[2] = FX_MODTYPE#MULT;
 		state[3] = 4;
 		state[4] = 0.5;
 	);
@@ -141,7 +115,7 @@ function effect_note_setup_lfo(effect, note, notestate) local(state, targetIndex
 	notestate[1] = state[4]; // amp
 	
 	targetIndex = state[0] < 0 ? (
-		state[1] == 0 ? N_FREQ : N_AMP;
+		state[1] == 0 ? NOTE#FREQ : NOTE#AMP;
 	) : (
 		0;
 	);
@@ -153,8 +127,8 @@ function effect_note_setup_lfo(effect, note, notestate) local(state, targetIndex
 function effect_note_exec_lfo(effect, note, notestate) local(angFreq, value) (
 	angFreq = 2*$pi*exp(notestate[0])*invsrate;
 	notestate[4] += angFreq;
-	value = sin(notestate[4])*notestate[1];
-	notestate[3] == FX_MOD_TYPE_ADD ? (
+	value = notestate[1]*sin(notestate[4])*notestate[1];
+	notestate[3] == FX_MODTYPE#ADD ? (
 		note[notestate[2]] += value;
 	) : (
 		note[notestate[2]] *= (1 + value);
@@ -162,7 +136,7 @@ function effect_note_exec_lfo(effect, note, notestate) local(angFreq, value) (
 );
 
 function effect_swap(effect, fxIndex1, fxIndex2) local(note) (
-	effect[1] == FX_INDEX_LFO ? (
+	effect[1] == FX_SPECLIST_INDEX#LFO ? (
 		effect_swap_lfo(effect, fxIndex1, fxIndex2);
 	);
 	
@@ -175,12 +149,12 @@ function effect_swap(effect, fxIndex1, fxIndex2) local(note) (
 	);
 );
 function effect_note_setup(effect, note, notestate) (
-	effect[1] == FX_INDEX_LFO ? (
+	effect[1] == FX_SPECLIST_INDEX#LFO ? (
 		effect_note_setup_lfo(effect, note, notestate);
 	);
 );
 function effect_note_exec(effect, note, notestate) (
-	effect[1] == FX_INDEX_LFO ? (
+	effect[1] == FX_SPECLIST_INDEX#LFO ? (
 		effect_note_exec_lfo(effect, note, notestate);
 	);
 );
@@ -206,8 +180,8 @@ function reset_to_defaults() local(i, note_effect, effect_spec) (
 		i < fx_list_count;
 	);
 	note_effect = fx_list_start; // First slot
-	effect_spec = fx_spec_start + FX_INDEX_LFO*fx_spec_step;
-	{effect_init:effect_spec[FX_SPEC_INITFUNC]}(note_effect);
+	effect_spec = fx_spec_start + FX_SPECLIST_INDEX#LFO*fx_spec_step;
+	{effect_init:effect_spec[FX_HEADER#FUNC_INIT]}(note_effect);
 );
 !has_set_parameters ? reset_to_defaults();
 
@@ -361,19 +335,19 @@ midi_event ? while (
 		note < notes_end ? (
 			// Note parameters
 			note[0] = 1;
-			note[N_CHANNEL] = midi_channel;
-			note[N_NOTE] = midi_msg2;
-			note[N_VEL] = midi_msg3;
-			note[N_SECONDSFROMSTART] = -midi_offset*invsrate;
-			note[N_SECONDSFROMEND] = -note_maxduration;
-			note[N_FREQ_BASE] = 440*pow(2, (note[N_NOTE] - 69)/12);
-			note[N_AMP_BASE] = volume*note[N_VEL]/127;
+			note[NOTE#CHANNEL] = midi_channel;
+			note[NOTE#NOTE] = midi_msg2;
+			note[NOTE#VEL] = midi_msg3;
+			note[NOTE#SECONDSFROMSTART] = -midi_offset*invsrate;
+			note[NOTE#SECONDSFROMEND] = -note_maxduration;
+			note[NOTE#FREQ_BASE] = 440*pow(2, (note[NOTE#NOTE] - 69)/12);
+			note[NOTE#AMP_BASE] = volume*note[NOTE#VEL]/127;
 			
 			// Wavetable params
-			wavetable_index = log(note[N_FREQ_BASE]/wavetable_low)/log(wavetable_high/wavetable_low)*wavetables_count;
+			wavetable_index = log(note[NOTE#FREQ_BASE]/wavetable_low)/log(wavetable_high/wavetable_low)*wavetables_count;
 			wavetable_index = min(wavetables_count - 1, max(0, floor(wavetable_index)));
-			note[N_WAVEINDEX] = wavetable_index; // Wavetable #0
-			note[N_SAMPLEPOS] = rand(wavetable_sampleslength);
+			note[NOTE#WAVEINDEX] = wavetable_index; // Wavetable #0
+			note[NOTE#SAMPLEPOS] = rand(wavetable_sampleslength);
 			display_wavetable_index = wavetable_index;
 			
 			// FX note setup
@@ -392,8 +366,8 @@ midi_event ? while (
 		// Note off 
 		note = notes_start;
 		while (
-			note[0] && note[N_CHANNEL] == midi_channel && note[N_NOTE] == midi_msg2 ? (
-				note[N_SECONDSFROMEND] = max(note[N_SECONDSFROMEND], -midi_offset*invsrate);
+			note[0] && note[NOTE#CHANNEL] == midi_channel && note[NOTE#NOTE] == midi_msg2 ? (
+				note[NOTE#SECONDSFROMEND] = max(note[NOTE#SECONDSFROMEND], -midi_offset*invsrate);
 			);
 			note += notes_step;
 			note < notes_end;
@@ -420,11 +394,11 @@ while (
 note = notes_start;
 while (
 	note[0] ? (
-		note[N_SECONDSFROMSTART] > 0 ? (
-			secondsFromStart = note[N_SECONDSFROMSTART];
-			secondsFromEnd = note[N_SECONDSFROMEND];
-			note[N_FREQ] = note[N_FREQ_BASE];
-			note[N_AMP] = note[N_AMP_BASE];
+		note[NOTE#SECONDSFROMSTART] > 0 ? (
+			secondsFromStart = note[NOTE#SECONDSFROMSTART];
+			secondsFromEnd = note[NOTE#SECONDSFROMEND];
+			note[NOTE#FREQ] = note[NOTE#FREQ_BASE];
+			note[NOTE#AMP] = note[NOTE#AMP_BASE];
 			
 			// FX note setup
 			i = 0;
@@ -464,11 +438,11 @@ while (
 				);
 			);
 			!param_env_linear ? env = env*env*env;
-			note[N_AMP] *= env;
+			note[NOTE#AMP] *= env;
 			
-			wavetable = wavetables_start + note[N_WAVEINDEX]*wavetable_step;
+			wavetable = wavetables_start + note[NOTE#WAVEINDEX]*wavetable_step;
 			wavetable_samples = wavetable + wavetable_headerlength;
-			midsample = note[N_SAMPLEPOS];
+			midsample = note[NOTE#SAMPLEPOS];
 			lowsample = floor(midsample);
 			highsample = ceil(midsample)%wavetable_sampleslength;
 			ratio = (midsample - lowsample);
@@ -482,21 +456,21 @@ while (
 			midvalueR = lowvalue + (highvalue - lowvalue)*ratio;
 			
 			wavetable_freq = wavetable[0];
-			freqRatio = note[N_FREQ]/wavetable_freq;
+			freqRatio = note[NOTE#FREQ]/wavetable_freq;
 
 			midsample += freqRatio;
 			midsample > wavetable_sampleslength ? while (
 				midsample -= wavetable_sampleslength;
 				midsample > wavetable_sampleslength;
 			);
-			note[N_SAMPLEPOS] = midsample;
+			note[NOTE#SAMPLEPOS] = midsample;
 			
-			spl0 += midvalueL*note[N_AMP];
-			spl1 += midvalueR*note[N_AMP];
+			spl0 += midvalueL*note[NOTE#AMP];
+			spl1 += midvalueR*note[NOTE#AMP];
 		);
 
-		note[N_SECONDSFROMSTART] += invsrate;
-		note[N_SECONDSFROMEND] += invsrate;
+		note[NOTE#SECONDSFROMSTART] += invsrate;
+		note[NOTE#SECONDSFROMEND] += invsrate;
 	);
 	note += notes_step;
 	note < note_active_end;

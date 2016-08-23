@@ -10,7 +10,7 @@ function functionRefs(source) {
 			return name;
 		});
 		functionSwitcherSets[groupName] = {
-			counter: 0,
+			counter: 1,
 			functions: [],
 			map: {},
 			argNames: argNames,
@@ -34,7 +34,7 @@ function functionRefs(source) {
 		var switcherCode = 'function ' + groupName + '(' + ['function_id'].concat(group.argNames).join(', ') + ') (\n';
 		group.functions.forEach(function (func, index) {
 			if (index > 0) switcherCode += '\n: ';
-			switcherCode += '\tfunction_id == ' + index + ' ? ' + func + '(' + group.argNames.join(', ') + ')';
+			switcherCode += '\tfunction_id == ' + group.map[func] + ' ? ' + func + '(' + group.argNames.join(', ') + ')';
 		});
 		switcherCode += ';\n)';
 		return switcherCode;
@@ -83,6 +83,44 @@ function arrowProperties(source) {
 	return source;
 };
 
+function autoEnums(source) {
+	var groups = {};
+	function getGroup(key) {
+		return groups[key] = groups[key] || {
+			counter: 0,
+			countingRefs: 0,
+			values: [],
+			map: {}
+		};
+	}
+	source = source.replace(/([a-z0-9\-\_\.]+)#([a-z0-9\-\_\.]+)\(([0-9]+)\)/gi, function (match, key, suffix, forceNumber) {
+		var group = getGroup(key);
+		var n = parseFloat(forceNumber);
+		if (isNaN(n)) throw new Error('Invalid enum forcing: ' + match);
+		group.counter = Math.max(n + 1, counter);
+		return key + '#' + suffix;
+	});
+	source = source.replace(/([a-z0-9\-\_\.]+)#([a-z0-9\-\_\.]+)/gi, function (match, key, suffix) {
+		var group = getGroup(key);
+		if (suffix in group.map) {
+			return group.map[suffix];
+		} else {
+			group.values.push(suffix);
+			return group.map[suffix] = (group.counter++) + '/*' + key + ':' + suffix + '*/';
+		}
+	});
+	source = source.replace(/([a-z0-9\-\_\.]+)#(#?)/gi, function (match, key, forceOnlyCount) {
+		var group = getGroup(key);
+		if (!group.counter) throw new Error('Reference to undefined group: ' + match);
+		group.countingRefs++;
+		if (forceOnlyCount && group.countingRefs != 1) {
+			throw new Error('Group counted more than once: ' + match);
+		}
+		return group.counter + '/*' + key + ': ' + group.values.join(', ') + '*/';
+	});
+	return source;
+}
+
 module.exports = function (source) {
-	return functionRefs(arrowProperties(source));
+	return functionRefs(autoEnums(source));
 };
