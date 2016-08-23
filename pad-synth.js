@@ -1,24 +1,21 @@
 var fs = require('fs');
 var JsfxUi = require('./jsfx-ui');
 
-var source = fs.readFileSync(__dirname + '/pad-synth.txt');
+var source = fs.readFileSync(__dirname + '/pad-synth.txt', {encoding: 'utf-8'});
 
 var ui = new JsfxUi('screen_stack', 'screen_count', 'screen_step');
 var main = ui.screen('main');
-
 // Main
 var top = main.top('25', {line: true});
-
-var aboutPage = top.subView('PadSynth');
-aboutPage.splitY(0.1);
-aboutPage.top(20).text('PadSynth');
-aboutPage.top(20).text('by Geraint Luff', {text: [0.5, 0.5, 0.5]});
-aboutPage.inset(40, 40).wrapText('This is a JSFX implementation of the "padsynth" algorithm from ZynAddSubFX, which I love but hasn\'t been updated in a while.  It\'s not a complete replacement, but I\'m adding features as I need them.\n\nIt\'s a sample-based synth, where the samples are designed in the frequency domain (which allows customised harmonic spread) and then generated using an inverse FFT.\n\nThe GUI for this synth is generated in JavaScript.');
-
+top.actionButton(ui.openScreen('about')).text('PadSynth');
 var body = main.inset(20, 10);
 var buttonBar = body.top(25).inset(0, 0, 0, 5);
 
-var envelopePage = buttonBar.splitX(0.5).subView('Envelope (ADSR)');
+buttonBar.splitX(0.5).actionButton(ui.openScreen('envelope')).text('Envelope (ADSR)');
+buttonBar.actionButton(ui.openScreen({code: '(fx_spec_start + (fx_list_start + 0*fx_list_step)[FX_INDEX]*fx_spec_step)[FX_SPEC_SCREEN]'})).text('LFO');
+
+var envelopePage = ui.screen('envelope');
+addBackButton(envelopePage);
 
 function sliderSet(host, sliders, extra) {
 	var remaining = sliders.length + (extra || 0);
@@ -109,6 +106,19 @@ waveform.code([
 	');'
 ], 'box_', {background: [0.05, 0.05, 0.05]});
 
+function addBackButton(screen) {
+	var navBar = screen.top(ui.texth + '*1.5').left(ui.texth + '*10');
+	navBar.actionButton(screen.close()).text('< back');
+	return screen;
+}
+
+var aboutPage = ui.screen('about');
+addBackButton(aboutPage);
+aboutPage.splitY(0.1);
+aboutPage.top(20).text('PadSynth');
+aboutPage.top(20).text('by Geraint Luff', {text: [0.5, 0.5, 0.5]});
+aboutPage.inset(40, 40).wrapText('This is a JSFX implementation of the "padsynth" algorithm from ZynAddSubFX, which I love but hasn\'t been updated in a while.  It\'s not a complete replacement, but I\'m adding features as I need them.\n\nIt\'s a sample-based synth, where the samples are designed in the frequency domain (which allows customised harmonic spread) and then generated using an inverse FFT.\n\nThe GUI for this synth is generated in JavaScript.');
+
 var gfxCode = ui.toString();
 
 function serializeVariables(varMap) {
@@ -156,6 +166,7 @@ var serializeCode = serializeVariables({
 });
 
 var genCode = source + '\n@serialize\n' + serializeCode + '\n@gfx\n' + gfxCode;
+genCode = require('./pre-processor')(genCode);
 var targetFile = process.argv[2];
 if (targetFile) {
 	fs.writeFileSync(targetFile, genCode);

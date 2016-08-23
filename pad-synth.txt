@@ -4,6 +4,7 @@ out_pin:Left
 out_pin:Right
 
 @init
+
 // can_recompute = 0;
 // action_recompute = 0;
 // recompute_index - zero initially;
@@ -22,9 +23,11 @@ screen_stack_end = screen_stack + screen_count*screen_step;
 // Description of all effects in the system
 fx_spec_start = screen_stack_end;
 fx_spec_count = 10;
-fx_spec_headerlength = 2; // Name, N-mod
+fx_spec_headerlength = 4; // Name, N-mod, UI screen name, initFunc
 FX_SPEC_NAME = 0;
 FX_SPEC_MODCOUNT = 1;
+FX_SPEC_SCREEN = 2;
+FX_SPEC_INITFUNC = 3;
 fx_spec_modlength = 3;
 FX_MOD_NAME = 0;
 FX_MOD_TYPE = 1;
@@ -91,15 +94,17 @@ wavetable_refsrate = 48000;
 wavetable_low = 50;
 wavetable_high = 4000;
 
-FX_INDEX_LFO = 1;
+FX_INDEX_LFO = 0;
 effectspec = fx_spec_start + fx_spec_count*FX_INDEX_LFO;
-effectspec[0] = "LFO";
-effectspec[1] = 2;
+effectspec[FX_SPEC_NAME] = "LFO";
+effectspec[FX_SPEC_MODCOUNT] = 2;
+effectspec[FX_SPEC_SCREEN] = "effect.lfo";
 modspec = effectspec + fx_spec_headerlength;
 modspec[FX_MOD_NAME] = "Frequency";
 modspec[FX_MOD_TYPE] = FX_MOD_TYPE_ADD;
 modspec[FX_MOD_RANGE] = 2;
 
+effectspec[FX_SPEC_INITFUNC] = {effect_init}effect_init_lfo;
 function effect_init_lfo(effect) local(mods, state) (
 	effect[0] = 1;
 	effect[1] = FX_INDEX_LFO;
@@ -110,7 +115,7 @@ function effect_init_lfo(effect) local(mods, state) (
 	state[1] = 1; // Note amplitude
 	state[2] = FX_MOD_TYPE_MULT;
 	
-	state[3] = 4; // Freq
+	state[3] = 10; // Freq
 	state[4] = 0.5; // Amp
 );
 function effect_swap_lfo(effect, fxIndex1, fxIndex2) (
@@ -132,8 +137,8 @@ function effect_swap_lfo(effect, fxIndex1, fxIndex2) (
 function effect_note_setup_lfo(effect, note, notestate) local(state, targetIndex) (
 	state = effect + fx_list_headerlength;
 	// Two modulatable parameters
-	notestate[0] = log(state[4]); // freq
-	notestate[1] = state[5]; // amp
+	notestate[0] = log(state[3]); // freq
+	notestate[1] = state[4]; // amp
 	
 	targetIndex = state[0] < 0 ? (
 		state[1] == 0 ? N_FREQ : N_AMP;
@@ -145,10 +150,10 @@ function effect_note_setup_lfo(effect, note, notestate) local(state, targetIndex
 	notestate[3] = state[2]; // Modulation type
 	notestate[4] = 0; // Phase
 );
-function effect_note_exec_lfo(note, notestate) local(angFreq, phase, value) (
-	angFreq = 2*$pi*exp(notestate[0])/srate;
-	phase = notestate[4] += angFreq;
-	value = sin(phase)*notestate[1];
+function effect_note_exec_lfo(effect, note, notestate) local(angFreq, value) (
+	angFreq = 2*$pi*exp(notestate[0])*invsrate;
+	notestate[4] += angFreq;
+	value = sin(notestate[4])*notestate[1];
 	notestate[3] == FX_MOD_TYPE_ADD ? (
 		note[notestate[2]] += value;
 	) : (
@@ -157,7 +162,7 @@ function effect_note_exec_lfo(note, notestate) local(angFreq, phase, value) (
 );
 
 function effect_swap(effect, fxIndex1, fxIndex2) local(note) (
-	effect[0] == FX_INDEX_LFO ? (
+	effect[1] == FX_INDEX_LFO ? (
 		effect_swap_lfo(effect, fxIndex1, fxIndex2);
 	);
 	
@@ -170,17 +175,19 @@ function effect_swap(effect, fxIndex1, fxIndex2) local(note) (
 	);
 );
 function effect_note_setup(effect, note, notestate) (
-	effect[0] == FX_INDEX_LFO ? (
+	effect[1] == FX_INDEX_LFO ? (
 		effect_note_setup_lfo(effect, note, notestate);
 	);
 );
 function effect_note_exec(effect, note, notestate) (
-	effect[0] == FX_INDEX_LFO ? (
-		effect_note_exec_lfo(note, notestate);
+	effect[1] == FX_INDEX_LFO ? (
+		effect_note_exec_lfo(effect, note, notestate);
 	);
 );
 
-function reset_to_defaults() local(i, note_effect) (
+function {effect_init}(effect_slot);
+
+function reset_to_defaults() local(i, note_effect, effect_spec) (
 	action_recompute = 1;
 	can_recompute = 1;
 	has_set_parameters = 1;
@@ -199,7 +206,8 @@ function reset_to_defaults() local(i, note_effect) (
 		i < fx_list_count;
 	);
 	note_effect = fx_list_start; // First slot
-	effect_init_lfo(note_effect);
+	effect_spec = fx_spec_start + FX_INDEX_LFO*fx_spec_step;
+	{effect_init:effect_spec[FX_SPEC_INITFUNC]}(note_effect);
 );
 !has_set_parameters ? reset_to_defaults();
 
@@ -368,7 +376,7 @@ midi_event ? while (
 			note[N_SAMPLEPOS] = rand(wavetable_sampleslength);
 			display_wavetable_index = wavetable_index;
 			
-			// FX init
+			// FX note setup
 			i = 0;
 			while (
 				effect = fx_list_start + i*fx_list_step;
@@ -418,9 +426,14 @@ while (
 			note[N_FREQ] = note[N_FREQ_BASE];
 			note[N_AMP] = note[N_AMP_BASE];
 			
+			// FX note setup
 			i = 0;
 			while (
 				effect = fx_list_start + i*fx_list_step;
+				notestate = note + note_headerlength + note_fx_statelength*i;
+				effect[0] ? (
+					effect_note_exec(effect, note, notestate);
+				);
 				i += 1;
 				i < fx_list_count;
 			);

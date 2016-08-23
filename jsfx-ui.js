@@ -32,6 +32,7 @@ function mergeOptions(root, child) {
 
 function ScreenSwitcher(screenStackVar, screenCount, screenStep, options) {
 	if (!(this instanceof ScreenSwitcher)) return new ScreenSwitcher(options);
+	var thisSwitcher = this;
 
 	options = options || {};
 	options.background = options.background || [0.95, 0.95, 0.95];
@@ -56,13 +57,22 @@ function ScreenSwitcher(screenStackVar, screenCount, screenStep, options) {
 	var alignTextFunction = options.alignText = options.alignText || prefix + 'align_text';
 	var pushScreen = options.pushScreen = options.pushScreen || prefix + 'push_screen';
 	var popScreen = options.popScreen = options.popScreen || prefix + 'pop_screen';
-	var screenVars = options.screenVars = options.screenVars || prefix + 'current_screen';
+	var screenSetVar = options.screenSetVar = options.screenSetVar || prefix + 'screen_set';
+	var screenGetVar = options.screenGetVar = options.screenGetVar || prefix + 'screen_get';
 	
+	var defaultScreen = 0;
 	var screens = {};
 	var prefixCode = [
-		'function ' + screenVars + '() (',
+		'function ' + screenGetVar + '(index) local(screenVars) (',
 		indent([
-			screenStackVar + ' + ' + screenLevelVar + '*' + screenStep + ' + 1;'
+			'screenVars = ' + screenStackVar + ' + ' + screenLevelVar + '*' + screenStep + ' + 1;',
+			'screenVars[index];'
+		]),
+		');',
+		'function ' + screenSetVar + '(index, value) local(screenVars) (',
+		indent([
+			'screenVars = ' + screenStackVar + ' + ' + screenLevelVar + '*' + screenStep + ' + 1;',
+			'screenVars[index] = value;'
 		]),
 		');',
 		'function ' + popScreen + '() (',
@@ -75,6 +85,7 @@ function ScreenSwitcher(screenStackVar, screenCount, screenStep, options) {
 			indent([
 				screenLevelVar + ' += 1;',
 				'screen = ' + screenStackVar + ' + ' + screenLevelVar + '*' + screenStep + ';',
+				// Clear out the variables
 				'i = 0;',
 				'while (',
 				indent([
@@ -83,11 +94,9 @@ function ScreenSwitcher(screenStackVar, screenCount, screenStep, options) {
 				]),
 				');',
 				'screen[0] = screen_id;',
-				screenVars + '();'
+				'1'
 			]),
-			') : (',
-			indent([screenStackVar + ' + (' + screenCount + ' - 1)*' + screenStep + ' + 1;']),
-			');'
+			') : 0;'
 		]),
 		');',
 		'gfx_clear = ' + rgbToClear(options.background) + ';',
@@ -123,13 +132,16 @@ function ScreenSwitcher(screenStackVar, screenCount, screenStep, options) {
 			'gfx_x = gfx_y = gfx_texth;',
 			setColor(options.text),
 			'gfx_drawstr("Invalid screen: ");',
-			'gfx_drawnumber(' + screenVar + ', 5);'
+			'gfx_drawnumber(' + screenVar + ', 5);',
+			clickVar + '&1 ? ' + screenLevelVar + ' = ' + screenVar + ' = 0;'
 		]),
 		');',
 		prefix + 'mouse_old = mouse_cap;'
 	].join('\n');
 	this.toString = function () {
 		var code = prefixCode;
+		code += '!' + screenVar + ' ? ' + screenVar + ' = ' + defaultScreen + ';';
+		code += 'default_screen = ' + defaultScreen + ';\n';
 		for (var screenId in screens) {
 			code += screenVar + ' == ' + screenId + ' ? (\n';
 			code += indent(screens[screenId]);
@@ -138,19 +150,33 @@ function ScreenSwitcher(screenStackVar, screenCount, screenStep, options) {
 		return code + suffixCode;
 	};
 
-	var screenIdCounter = 0;
-	this.screen = function () {
+	this.openScreen = function (screenId) {
+		if (typeof screenId == 'string') screenId = JSON.stringify(screenId);
+		if (typeof screenId === 'object') {
+			screenId = screenId.code;
+		}
+		var args = [].slice.call(arguments, 1);
+		var tmpScreen = options.tmp + 'screen';
+		var code = tmpScreen + ' = ' + pushScreen + '(' + screenId + ');';
+		args.forEach(function (arg, index) {
+			code += '\n' + tmpScreen + '[' + index + '] = ' + arg + ';'
+		});
+		return code;
+	};
+	var screenIdCounter = 1;
+	this.screen = function (screenId) {
+		var screenId = screenId || screenIdCounter++;
+		if (typeof screenId == 'string') screenId = JSON.stringify(screenId);
+		defaultScreen = defaultScreen || screenId;
+
 		var box = new DrawBox(0, 0, 'gfx_w', 'gfx_h', 'gfx_w', 'gfx_h');
-		var screenId = screenIdCounter++;
 		var screen = new Component(box, mergeOptions(options, {prefix: prefix + 'screen' + screenId + '_'}));
 		screen.open = function () {
 			var args = [].slice.call(arguments, 0);
-			var tmpScreen = options.tmp + 'screen';
-			var code = tmpScreen + ' = ' + pushScreen + '(' + screenId + ');';
-			args.forEach(function (arg, index) {
-				code += '\n' + tmpScreen + '[' + index + '] = ' + arg + ';'
-			});
-			return code;
+			return thisSwitcher.openScreen([screenId].concat(args));
+		};
+		screen.close = function () {
+			return popScreen + '()';
 		};
 		screens[screenId] = screen;
 		return screen;
@@ -162,6 +188,7 @@ function ScreenSwitcher(screenStackVar, screenCount, screenStep, options) {
 	this.uniqueValue = function () {
 		return uniqueIdCounter++;
 	};
+	this.texth = texth;
 }
 
 function addDimensions(a, b) {
@@ -411,15 +438,6 @@ function Component(initBox, options) {
 		if (onchange) components.push(indent([onchange]));
 		components.push(');');
 		return this;
-	};
-	
-	this.subView = function (text, extraOptions) {
-		var opts = mergeOptions(options, extraOptions);
-		var screen = options._switcher.screen(text);
-		this.actionButton(screen.open(), opts).text(text);
-		var navBar = screen.top(this.texth + '*1.5').left(this.texth + '*10');
-		navBar.actionButton(opts.popScreen + '()').text('< back');
-		return screen;
 	};
 	
 	this.code = function (code, boxVars, codeOptions) {
