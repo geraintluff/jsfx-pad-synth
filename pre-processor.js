@@ -90,14 +90,20 @@ function autoEnums(source) {
 			counter: 0,
 			countingRefs: 0,
 			values: [],
-			map: {}
+			map: {},
+			fixedVars: {}
 		};
 	}
 	source = source.replace(/([a-z0-9\-\_\.]+)#([a-z0-9\-\_\.]+)\(([0-9]+)\)/gi, function (match, key, suffix, forceNumber) {
 		var group = getGroup(key);
 		var n = parseFloat(forceNumber);
 		if (isNaN(n)) throw new Error('Invalid enum forcing: ' + match);
-		group.counter = Math.max(n + 1, counter);
+		group.counter = Math.max(n + 1, group.counter);
+		if ((n in group.fixedVars) && group.fixedVars[n] !== suffix) {
+			throw new Error('Conflicting enum forcing for ' + n + ' in ' + key + ': ' + suffix + ' and ' + group.fixedVars[n]);
+		}
+		group.fixedVars[n] = suffix;
+		group.map[suffix] = n + '/*' + key + ':' + suffix + '*/';
 		return key + '#' + suffix;
 	});
 	source = source.replace(/([a-z0-9\-\_\.]+)#([a-z0-9\-\_\.]+)/gi, function (match, key, suffix) {
@@ -118,6 +124,12 @@ function autoEnums(source) {
 		}
 		return group.counter + '/*' + key + ': ' + group.values.join(', ') + '*/';
 	});
+	for (var key in groups) {
+		var group = groups[key];
+		if (!group.countingRefs) {
+			console.error("Warning: group " + key + ' is not counted');
+		}
+	}
 	return source;
 }
 

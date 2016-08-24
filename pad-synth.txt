@@ -84,53 +84,55 @@ function effect_init_lfo(effect) local(mods, state) (
 	effect[FX#NAME] = "LFO Modulator";
 	
 	state = effect + fx_list_headerlength;
-	state[0] = -1; // Initial target: note itself
-	state[1] = 1; // Note amplitude
-	state[2] = FX_MODTYPE#MULT;
+	state[LFO_STATE#MOD_EFFECT] = -1; // Initial target: note itself
+	state[LFO_STATE#MOD_INDEX] = 1; // Note amplitude
+	state[LFO_STATE#MOD_TYPE] = FX_MODTYPE#MULT;
 	
-	state[3] = 5; // Freq
-	state[4] = 0.5; // Amp
+	state[LFO_STATE#FREQ] = 5; // Freq
+	state[LFO_STATE#AMP] = 0.5; // Amp
 );
 function effect_swap_lfo(effect, fxIndex1, fxIndex2) (
 	state = effect + fx_list_headerlength;
 
-	state[0] == fxIndex1 ? (
-		state[0] = fxIndex2;
-	) : state[0] == fxIndex2 ? (
-		state[0] = fxIndex1;
+	state[LFO_STATE#MOD_EFFECT] == fxIndex1 ? (
+		state[LFO_STATE#MOD_EFFECT] = fxIndex2;
+	) : state[LFO_STATE#MOD_EFFECT] == fxIndex2 ? (
+		state[LFO_STATE#MOD_EFFECT] = fxIndex1;
 	);
-	state[0] < -1 ? (
-		state[0] = -1;
-		state[1] = 1;
-		state[2] = FX_MODTYPE#MULT;
-		state[3] = 4;
-		state[4] = 0.5;
+	state[LFO_STATE#MOD_EFFECT] < -1 ? (
+		// Our target was just deleted - reset the effect
+		effect_init_lfo(effect);
 	);
 );
 function effect_note_setup_lfo(effect, note, notestate) local(state, targetIndex) (
 	state = effect + fx_list_headerlength;
 	// Two modulatable parameters
-	notestate[0] = log(state[3]); // freq
-	notestate[1] = state[4]; // amp
+	notestate[LFO_NOTE_STATE#LOG_FREQ(0)] = log(state[LFO_STATE#FREQ]); // freq
+	notestate[LFO_NOTE_STATE#AMP(1)] = state[LFO_STATE#AMP]; // amp
 	
-	targetIndex = state[0] < 0 ? (
-		state[1] == 0 ? NOTE#FREQ : NOTE#AMP;
+	targetIndex = state[LFO_STATE#MOD_EFFECT] < 0 ? (
+		state[LFO_STATE#MOD_INDEX] == 0 ? NOTE#FREQ : NOTE#AMP;
 	) : (
 		0;
 	);
 	// Use the remainder for private state
-	notestate[2] = targetIndex;
-	notestate[3] = state[2]; // Modulation type
-	notestate[4] = 0; // Phase
+	notestate[LFO_NOTE_STATE#TARGET] = targetIndex;
+	notestate[LFO_NOTE_STATE#MODTYPE] = state[LFO_STATE#MOD_TYPE]; // Modulation type
+	notestate[LFO_NOTE_STATE#PHASE] = 0; // Phase
 );
-function effect_note_exec_lfo(effect, note, notestate) local(angFreq, value) (
-	angFreq = 2*$pi*exp(notestate[0])*invsrate;
-	notestate[4] += angFreq;
-	value = notestate[1]*sin(notestate[4])*notestate[1];
-	notestate[3] == FX_MODTYPE#ADD ? (
-		note[notestate[2]] += value;
-	) : (
-		note[notestate[2]] *= (1 + value);
+function effect_note_exec_lfo(effect, note, notestate) local(angFreq, value, targetIndex) (
+	targetIndex = notestate[LFO_NOTE_STATE#TARGET];
+	debug_lfo_targetIndex = targetIndex;
+	targetIndex > 0 ? (
+		angFreq = 2*$pi*exp(notestate[LFO_NOTE_STATE#LOG_FREQ(0)])*invsrate;
+		notestate[LFO_NOTE_STATE#PHASE] += angFreq;
+		value = notestate[LFO_NOTE_STATE#AMP]*sin(notestate[LFO_NOTE_STATE#PHASE]);
+		debug.value = value;
+		notestate[LFO_NOTE_STATE#MODTYPE] == FX_MODTYPE#ADD ? (
+			note[targetIndex] += value;
+		) : (
+			note[targetIndex] *= (1 + value);
+		);
 	);
 );
 
@@ -477,14 +479,84 @@ while (
 
 @gfx
 
+function draw_waveform() local(wavetable, samples, value, x, y, gi, gis, box_left, box_top, box_width, box_height) (
+	box_left = ui_left();
+	box_top = ui_top();
+	box_width = ui_width();
+	box_height = ui_height();
+
+	wavetable = wavetables_start + display_wavetable_index*wavetable_step;
+	samples = wavetable + wavetable_headerlength;
+	gis = ceil(wavetable_sampleslength*0.25/box_width);
+	// Left - blue
+	gi = 0;
+	gfx_r = 0.25;
+	gfx_g = 0.5;
+	gfx_b = 0.75;
+	gfx_x = box_left;
+	gfx_y = ui_top() + box_height/2;
+	while (
+		value = min(1, max(-1, samples[gi*2]));
+		x = box_left + gi/wavetable_sampleslength*box_width;
+		y = box_top + 0.5*(1 - value)*box_height;
+		gfx_lineto(x, y, 0);
+		gi += 1;
+		gi < wavetable_sampleslength;
+	);
+	// Right - orange
+	gi = 0;
+	gfx_r = 0.75;
+	gfx_g = 0.5;
+	gfx_b = 0.25;
+	gfx_x = box_left;
+	gfx_y = box_top + box_height/2;
+	while (
+		value = min(1, max(-1, samples[gi*2 + 1]));
+		x = box_left + gi/wavetable_sampleslength*box_width;
+		y = box_top + 0.5*(1 - value)*box_height;
+		gfx_lineto(x, y, 0);
+		gi += 1;
+		gi < wavetable_sampleslength;
+	);
+	ui_color(0, 0, 0);
+	ui_border();
+);
+
 ui_start("main"); // Default screen
+
+slider_value = slider_value ? slider_value : 0.5;
 
 ui_screen() == "main" ? (
 	control_navbar("PadSynth", "about", "About");
+	ui_pad();
+	ui_split_bottomtext(0);
+		ui_split_righttext("Regenerate");
+			control_indicator_button("Regenerate", can_recompute) ? (
+				can_recompute ? action_recompute = 1;
+			);
+		ui_pop();
+	
+		ui_split_lefttext("Width (cents)");
+			ui_text("Width (cents)");
+		ui_pop();
+		ui_split_right(50);
+			ui_textnumber(param_width_cents + 0.5, "%i");
+		ui_pop();
+		new_width_cents = control_hslider(param_width_cents, 5, 200, 3);
+		new_width_cents != param_width_cents ? can_recompute = 1;
+		param_width_cents = new_width_cents;
+	ui_pop();
+	ui_padbottom();
+	
+	ui_push();
+		ui_fill(0, 0, 0);
+		draw_waveform();
+		control_gloss(1);
+	ui_pop();
 ) : ui_screen() == "about" ? (
 	control_navbar("About", 0, 0);
 	
-	ui_pad(20);
+	ui_pad();
 
 	ui_align(0.5, 0.67);
 	text_height = ui_wraptext("This is a JSFX implementation of the 'padsynth' algorithm from ZynAddSubFX, which I love but hasn\'t been updated in a while.  It\'s not an exact replacement, but I\'m adding features as I need them.\n\nIt\'s a sample-based synth, where the samples are designed in the frequency domain (which allows customised harmonic spread) and then generated using an inverse FFT.\n\nThe GUI for this synth uses a JSFX UI library originally written for this synth, but is now a project of its own.");

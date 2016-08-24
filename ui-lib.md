@@ -151,19 +151,43 @@ ui_fill(0, 0, 0); // Does not overwrite the footer
 
 These are the same as `ui_split_top()` etc., except instead of a pixel height you specify a ratio of the current viewport width/height.
 
-### `ui_pad(pixels)`
+### `ui_split_toptext(text)`, etc.
 
-This insets the current viewport by this much in each direction.
+These are the same as `ui_split_top()` etc., except it measures the supplied text, plus some amount of padding.
+
+This is a useful way to get a default height/width for buttons.
+
+### `ui_pad()`
+
+`ui_pad()` pads by a default amount in each direction.  This amount can be set using `ui_padding()`.
+
+### `ui_padleft()`, `ui_padright()`, `ui_padtop()` and `ui_padbottom()`
+
+Pads in one direction only, with the default padding.
+
+### `ui_pad1(pixels)`, `ui_pad2(xpixels, ypixels)`, `ui_pad4(left, top, right, bottom)`
+
+This insets the current viewport by an appropriate amount in each direction.  The three numbered variants are for different numbers of arguments.  If any of the padding values is a negative number, the default padding for that direction is used.
 
 It does *not* change the stack.
+
+### `ui_padding(hpadding, vpadding);`
+
+This sets the default padding for each direction.  If you supply a negative number for either, the padding in that direction is unchanged.
 
 ## Graphics
 
 These do not add or remove anything to the stack.  Instead, they modify the current drawing layer (and any later layers that inherit from it).
 
-### `ui_fontsize(pixels)`, `ui_fontbold(isBold)` and `ui_fontitalic(isItalic)`
+### `ui_fontsize(pixels)`, `ui_fontbold(isBold)`, `ui_fontitalic(isItalic)` and `ui_fontface(name)`
 
-Changes properties of the font.
+Changes properties of the font.  These changes have immediate effect.
+
+The UI library always uses font index 16, so it is recommended that you avoid this in custom drawing code.  If you make changes to this font index, then the UI system might not notice, and will draw incorrectly.  However, if you use a different font index, the UI system checks this before drawing text and will reset.
+
+### `ui_font(name, size, isBold, isItalic)`
+
+Composite function for the above operations.  If `0` is supplied to either `name` or `size`, it re-uses the current font name/size.
 
 ### `ui_align(halign, valign)`
 
@@ -199,11 +223,19 @@ This automatically sets the text colour to a contrasting one (black or white).
 
 ## Input
 
-### `ui_mousedown()`
+### `ui_mouse_x()` and `ui_mouse_y()`
+
+Mouse position relative to current viewport.
+
+### `ui_mouse_xratio()` and `ui_mouse_yratio()`
+
+Mouse position as proportion of current viewport.  If the mouse is outside the current viewport, this value will be outside of the range 0-1.
+
+### `ui_mouse_down()`
 
 Returns whether the mouse was just clicked inside the current viewport.
 
-### `ui_mouseup()`
+### `ui_mouse_up()`
 
 Returns whether the mouse was just released inside the current viewport.
 
@@ -237,7 +269,11 @@ Whether this element was clicked before and the mouse is still down.  It returns
 
 These are controls implemented using the above functions.  They are opinionated - they have fixed colours and layouts.  However, they can be used to create a powerful UI more easily.
 
-#### `control_button(text)`
+### `control_navbar(title, next_screen, next_title)`
+
+Displays a navigation bar for the screen with a centred title, and "back" button if the screen is not top-level.  If `next_screen` is supplied, it displays a button on the right-hand side for navigating to the next page.
+
+### `control_button(text)`
 
 Displays a button with text, and returns `true` if the button has just been clicked.
 
@@ -246,3 +282,19 @@ control_button("Go!") ? (
 	do_something();
 );
 ```
+
+### `control_indicator_button(text, enabled)`
+
+Displays a button that can be disabled (greyed-out).
+
+```
+control_button("Go!", ready_to_go) ? (
+	ready_to_go ? do_something();
+);
+```
+
+Note that it will still return positive when clicked, even if the button is disabled, so you should check again before performing an action.
+
+### `control_gloss(strength)`
+
+Adds highlights/shadows to the current viewport to give a nice 3D effect.  This is used by the all the `control_` controls, so use this if you want to match them with your custom elements.
