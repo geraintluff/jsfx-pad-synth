@@ -157,7 +157,7 @@ The return value of this function is the calculated height/width.
 
 These are the same as `ui_split_top()` etc., except it measures the supplied text, plus some amount of padding.  This is a useful way to get a default height/width for buttons and controls.
 
-If you pass an empty string to `ui_split_toptext()` or `ui_split_bottomtext()`, it will still return a minimum height of one line (plus padding), but there is no minimum width for `ui_split_lefttext()` or `ui_split_righttext()`.
+(If you pass an empty string to `ui_split_toptext()` or `ui_split_bottomtext()`, it will still return a minimum height of one line (plus padding), but there is no minimum width for `ui_split_lefttext()` or `ui_split_righttext()`.  However, measuring the empty string has some odd side-effects, so it's best to actually provide some text.)
 
 The return value of this function is the calculated height/width.
 

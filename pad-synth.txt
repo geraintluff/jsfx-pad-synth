@@ -71,7 +71,6 @@ wavetable_high = 4000;
 effectspec = fx_spec_start + fx_spec_count*FX_SPECLIST_INDEX#LFO;
 effectspec[FX_HEADER#NAME] = "LFO";
 effectspec[FX_HEADER#MODCOUNT] = 2;
-effectspec[FX_HEADER#CONFIG_SCREEN] = "effect.lfo";
 modspec = effectspec + fx_spec_headerlength;
 modspec[FX_MOD#NAME] = "Frequency";
 modspec[FX_MOD#TYPE] = FX_MODTYPE#ADD;
@@ -90,6 +89,15 @@ function effect_init_lfo(effect) local(mods, state) (
 	
 	state[LFO_STATE#FREQ] = 5; // Freq
 	state[LFO_STATE#AMP] = 0.5; // Amp
+);
+effectspec[FX_HEADER#CONFIG_UI_FUNCTION] = {config_ui}effect_ui_lfo;
+function effect_ui_lfo(effect) (
+	state = effect + fx_list_headerlength;
+	ui_split_n(2, 1);
+		state[LFO_STATE#AMP] = control_hslider(state[LFO_STATE#AMP], 0, 1, 1);
+	ui_split_next();
+		state[LFO_STATE#FREQ] = control_hslider(state[LFO_STATE#FREQ], 0, 100, 3);
+	ui_pop();
 );
 function effect_swap_lfo(effect, fxIndex1, fxIndex2) (
 	state = effect + fx_list_headerlength;
@@ -159,6 +167,7 @@ function effect_note_exec(effect, note, notestate) (
 );
 
 function {effect_init}(effect_slot);
+function {config_ui}(effect);
 
 function reset_to_defaults() local(i, note_effect, effect_spec) (
 	action_recompute = 1;
@@ -542,7 +551,7 @@ ui_start("main"); // Default screen
 slider_value = slider_value ? slider_value : 0.5;
 
 ui_screen() == "main" ? (
-	control_navbar("PadSynth", "about", "About");
+	control_navbar("PadSynth", "About", "about");
 	ui_pad();
 	ui_split_toptext("");
 		ui_split_n(2, 0);
@@ -550,11 +559,10 @@ ui_screen() == "main" ? (
 				ui_screen_open("envelope");
 			);
 		ui_split_next();
-			first_effect = fx_list_start;
-			effect_spec = fx_spec_start + fx_spec_step*(first_effect[FX#SPEC_INDEX]);
-			control_button(first_effect[FX#NAME]) ? (
+			display_first_effect = fx_list_start;
+			control_button(display_first_effect[FX#NAME]) ? (
 				ui_screen_open("edit-effect");
-				ui_screen_set(0, first_effect);
+				ui_screen_set(0, display_first_effect);
 			);
 		ui_pop();
 	ui_pop();
@@ -617,6 +625,10 @@ ui_screen() == "main" ? (
 		param_release = named_hslider("Release", param_release, 0.005, 5, 3, floor(param_release*1000 + 0.5), "%ims");
 	ui_pop();
 ) : ui_screen() == "edit-effect" ? (
-	effect = ui_screen_get(0);
-	control_navbar(effect[FX#NAME], 0, 0);
+	g_effect = ui_screen_get(0);
+	g_effect_spec = fx_spec_start + fx_spec_step*g_effect[FX#SPEC_INDEX];
+
+	control_navbar(g_effect[FX#NAME], 0, 0);
+	effect_ui = g_effect_spec[FX_HEADER#CONFIG_UI_FUNCTION];
+	{config_ui:effect_ui}(g_effect);
 ) : ui_system();
