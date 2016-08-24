@@ -151,11 +151,59 @@ ui_fill(0, 0, 0); // Does not overwrite the footer
 
 These are the same as `ui_split_top()` etc., except instead of a pixel height you specify a ratio of the current viewport width/height.
 
+The return value of this function is the calculated height/width.
+
 ### `ui_split_toptext(text)`, etc.
 
-These are the same as `ui_split_top()` etc., except it measures the supplied text, plus some amount of padding.
+These are the same as `ui_split_top()` etc., except it measures the supplied text, plus some amount of padding.  This is a useful way to get a default height/width for buttons and controls.
 
-This is a useful way to get a default height/width for buttons.
+If you pass an empty string to `ui_split_toptext()` or `ui_split_bottomtext()`, it will still return a minimum height of one line (plus padding), but there is no minimum width for `ui_split_lefttext()` or `ui_split_righttext()`.
+
+The return value of this function is the calculated height/width.
+
+### `ui_split_n(sections, direction)` and `ui_split_next()`
+
+These two functions are used to divide up the viewport into equal sections.  `ui_split_n()` creates the first split, and `ui_split_next()` pops the old split off and adds the next one.  Direction `0` is horizontal (meaning the sections are thin), and direction `1` is vertical (meaning the sections are flat and wide).
+
+```
+ui_split_n(4, 1); // Four sections stacked vertically
+	ui_text('Line 1');
+ui_split_next();
+	ui_text('Line 2');
+ui_split_next();
+	ui_text('Line 3');
+ui_pop();
+```
+
+It is fine to call `ui_split_n()` too few times (it just leaves a blank space) but calling it too many times results in an error.
+
+### `ui_push_height(height)` and `ui_push_width(width)`
+
+Push a new alignment state to the stack with the specified height/width, using the current alignment.
+
+### `ui_push_heightratio(ratio)` and `ui_push_widthratio(ratio)`
+
+Like `ui_push_height(height)` and `ui_push_width(width)`, but specifying a proportion of the height/width;
+
+The return value of this function is the calculated height/width.
+
+### `ui_push_heighttext(text)` and `ui_push_widthtext(text)`
+
+Like `ui_push_height(height)` and `ui_push_width(width)`, but measures the supplied text, plus some amount of padding.
+
+Similarly to `ui_split_toptext()` and `ui_split_bottomtext()`, if you pass in an empty string, it will still return the minimum height of one line (plus padding).  There is no minimum width for `ui_push_width
+
+The return value of this function is the calculated height/width.
+
+### `ui_push_above(height)`, `ui_push_below(height)`, `ui_push_leftof(width)` and `ui_push_rightof(width)`
+
+These functions are the counterparts of `ui_push_height()` and `ui_push_width()` to a certain extent.  They push a new viewport that is above/below/left/right of the viewport that would be produced by `ui_push_width()` or `ui_push_height()`.
+
+This lets you position content using `ui_push_height()` and `ui_push_width()` or other means, and then fit other content around that.  `ui_push_above()` and `ui_push_below()` can also be useful when used after `ui_wraptext()`, which again returns the height of the wrapped text.
+
+### `ui_push_aboveratio(ratio)`, `ui_push_abovetext(text)`, etc.
+
+You should by this point be able to guess what these functions do. :)
 
 ### `ui_pad()`
 
@@ -298,3 +346,5 @@ Note that it will still return positive when clicked, even if the button is disa
 ### `control_gloss(strength)`
 
 Adds highlights/shadows to the current viewport to give a nice 3D effect.  This is used by the all the `control_` controls, so use this if you want to match them with your custom elements.
+
+The normal strength is `1`, but some non-interactive elements use `0.5` (such as the nav-bar).
