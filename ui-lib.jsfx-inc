@@ -1,7 +1,7 @@
 @init
 uix_hassetup = 0;
 uix_screenstack = 0;
-uix_screenstack_step = 11; // 10 vars
+uix_screenstack_step = 10 + UI_SCREEN#; // header + 10 vars
 uix_screenstack_layercount = 10;
 uix_screenstack_currentlayer = 0;
 
@@ -76,8 +76,8 @@ function uix_click_block() (
 function ui_error(string) (
 	uix_click_block();
 	uix_screenstack_currentlayer = 0;
-	uix_screenstack[0] = "error";
-	uix_error = uix_screenstack[1] = string;
+	uix_screenstack[UI_SCREEN#ID] = "error";
+	uix_error = uix_screenstack[UI_SCREEN#] = string; // First argument
 	0;
 );
 
@@ -115,7 +115,7 @@ function ui_screen_close() (
 
 function ui_screen_get(index) local(screen) (
 	screen = (uix_screenstack + uix_screenstack_step*uix_screenstack_currentlayer);
-	offset = index + 1;
+	offset = index + UI_SCREEN#;
 	offset < uix_screenstack_step ? (
 		screen[offset];
 	) : (
@@ -215,13 +215,14 @@ function ui_start(defaultScreen) local(i, click) (
 	);
 );
 
-function ui_system() local(text, error) (
+function ui_system() local(text, error, screen) (
 	ui_screen() == "error" ? (
 		gfx_clear = 255 + 255*256 + 255*65536;
 		gfx_r = 64;
 		gfx_g = gfx_b = 0;
 		gfx_x = gfx_y = gfx_texth;
-		error = uix_error ? uix_error : uix_screenstack[1];
+		screen = uix_screenstack + uix_screenstack_step*uix_screenstack_currentlayer;
+		error = screen[UI_SCREEN#ID];
 		strlen(error) ? (
 			gfx_printf("Error: %s\n(%f)", error, error);
 		) : (

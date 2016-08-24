@@ -167,7 +167,7 @@ var serializeCode = serializeVariables({
 
 var preProcess = require('./pre-processor');
 
-var genCode = source + '\n@serialize\n' + serializeCode;
+var genCode = source;// + '\n@serialize\n' + serializeCode;
 genCode = preProcess(genCode);
 var targetFile = process.argv[2];
 if (targetFile) {

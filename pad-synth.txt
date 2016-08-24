@@ -17,6 +17,22 @@ invsrate = 1/srate;
 fftblock = 0;
 fftblock_end = 65536;
 
+string_slot_counter = 1;
+function string_slot(current) local(result) (
+	(current > 1 && current < string_slot_counter) ? (
+		current;
+	) : (
+		string_slot_counter < 1024 ? (
+			result = string_slot_counter;
+			string_slot_counter += 1;
+			result;
+		) : (
+			ui_error("Ran out of string slots!");
+			#string_slot_singleton; // All remaining strings the same
+		);
+	);
+);
+
 uiblock_end = ui_setup(fftblock_end);
 
 // Description of all effects in the system
@@ -29,30 +45,34 @@ fx_spec_step = fx_spec_headerlength + fx_spec_modlength*fx_spec_var_count;
 fx_spec_end = fx_spec_start + fx_spec_step*fx_spec_count;
 
 fx_list_start = fx_spec_end;
-fx_list_count = 10;
-fx_list_headerlength = FX##; // enabled, type, name
+fx_list_count = 0;
+fx_list_maxcount = 10;
+fx_list_headerlength = FX##;
 fx_list_statelength = 16;
 fx_list_step = fx_list_headerlength + fx_list_statelength;
-fx_list_end = fx_list_start + fx_list_step*fx_list_count;
+fx_list_end = fx_list_start + fx_list_step*fx_list_maxcount;
 
 notes_start = fx_list_end;
 note_headerlength = NOTE#;
 
 note_fx_statelength = fx_list_statelength;
-notes_step = note_headerlength + note_fx_statelength*fx_list_count;
+notes_step = note_headerlength + note_fx_statelength*fx_list_maxcount;
 notes_end = notes_start + polyphony*notes_step;
 // Clear all notes
-note = notes_start;
-while (
-	note[NOTE#ACTIVE] = 0;
-	note += notes_step;
-	note < notes_end;
+function clear_all_notes() local(note) (
+	note = notes_start;
+	while (
+		note[NOTE#ACTIVE] = 0;
+		note += notes_step;
+		note < notes_end;
+	);
 );
+clear_all_notes();
 
 wavetables_start = notes_end;
 wavetables_count = 18;
 wavetable_sampleslength = 32768;
-wavetable_headerlength = 1; // Freq
+wavetable_headerlength = WAVETABLE##; // Freq
 wavetable_step = wavetable_headerlength + wavetable_sampleslength*2;
 wavetables_end = wavetables_start + wavetables_count*wavetable_step;
 
@@ -68,27 +88,33 @@ wavetable_refsrate = 48000;
 wavetable_low = 50;
 wavetable_high = 4000;
 
-effectspec = fx_spec_start + fx_spec_count*FX_SPECLIST_INDEX#LFO;
+// Spec for LFO
+LFO_NOTE_STATE## > note_fx_statelength ? ui_error("note state too small for LFO");
+LFO_STATE## > fx_list_statelength ? ui_error("effect state too small for LFO");
+effectspec = fx_spec_start + fx_spec_count*FX_SPECLIST_INDEX#LFO(0);
 effectspec[FX_HEADER#NAME] = "LFO";
 effectspec[FX_HEADER#MODCOUNT] = 2;
-modspec = effectspec + fx_spec_headerlength;
+modspec = effectspec + fx_spec_headerlength + fx_spec_modlength*LFO_NOTE_STATE#LOG_FREQ(0);
 modspec[FX_MOD#NAME] = "Frequency";
 modspec[FX_MOD#TYPE] = FX_MODTYPE#ADD;
 modspec[FX_MOD#RANGE] = 2;
+modspec = effectspec + fx_spec_headerlength + fx_spec_modlength*LFO_NOTE_STATE#AMP(1);
+modspec[FX_MOD#NAME] = "Amount";
+modspec[FX_MOD#TYPE] = FX_MODTYPE#MULT;
+modspec[FX_MOD#RANGE] = 1;
 
 effectspec[FX_HEADER#FUNC_INIT] = {effect_init}effect_init_lfo;
 function effect_init_lfo(effect) local(mods, state) (
-	effect[FX#ENABLED] = 1;
 	effect[FX#SPEC_INDEX] = FX_SPECLIST_INDEX#LFO;
 	effect[FX#NAME] = "LFO Modulator";
 	
 	state = effect + fx_list_headerlength;
-	state[LFO_STATE#MOD_EFFECT] = -1; // Initial target: note itself
-	state[LFO_STATE#MOD_INDEX] = 1; // Note amplitude
-	state[LFO_STATE#MOD_TYPE] = FX_MODTYPE#MULT;
+	state[LFO_STATE#MOD_EFFECT(0)] = -1; // Initial target: note itself
+	state[LFO_STATE#MOD_INDEX(1)] = 1; // Note amplitude
+	state[LFO_STATE#MOD_TYPE(2)] = FX_MODTYPE#MULT;
 	
-	state[LFO_STATE#FREQ] = 5; // Freq
-	state[LFO_STATE#AMP] = 0.5; // Amp
+	state[LFO_STATE#FREQ(3)] = 5; // Freq
+	state[LFO_STATE#AMP(4)] = 0.5; // Amp
 );
 effectspec[FX_HEADER#CONFIG_UI_FUNCTION] = {config_ui}effect_ui_lfo;
 function effect_ui_lfo(effect) (
@@ -115,8 +141,8 @@ function effect_swap_lfo(effect, fxIndex1, fxIndex2) (
 function effect_note_setup_lfo(effect, note, notestate) local(state, targetIndex) (
 	state = effect + fx_list_headerlength;
 	// Two modulatable parameters
-	notestate[LFO_NOTE_STATE#LOG_FREQ(0)] = log(state[LFO_STATE#FREQ]); // freq
-	notestate[LFO_NOTE_STATE#AMP(1)] = state[LFO_STATE#AMP]; // amp
+	notestate[LFO_NOTE_STATE#LOG_FREQ] = log(state[LFO_STATE#FREQ]); // freq
+	notestate[LFO_NOTE_STATE#AMP] = state[LFO_STATE#AMP]; // amp
 	
 	targetIndex = state[LFO_STATE#MOD_EFFECT] < 0 ? (
 		state[LFO_STATE#MOD_INDEX] == 0 ? NOTE#FREQ : NOTE#AMP;
@@ -142,34 +168,46 @@ function effect_note_exec_lfo(effect, note, notestate) local(angFreq, value, tar
 	);
 );
 
+function {effect_init}(effect_slot);
+function {config_ui}(effect);
+
+function append_effect(index) local(spec, effect) (
+	debug.append_effect += 1;
+	fx_list_count < fx_list_maxcount ? (
+		// TODO: check the index is valid, otherwise insert placeholder (negative index)
+		effect = fx_list_start + fx_list_step*fx_list_count;
+		fx_list_count += 1;
+		spec = fx_spec_start + fx_spec_step*index;
+		{effect_init:spec[FX_HEADER#FUNC_INIT]}(effect);
+	);
+	-1;
+);
+// TODO: make these use function references
 function effect_swap(effect, fxIndex1, fxIndex2) local(note) (
-	effect[1] == FX_SPECLIST_INDEX#LFO ? (
+	effect[FX#SPEC_INDEX] == FX_SPECLIST_INDEX#LFO ? (
 		effect_swap_lfo(effect, fxIndex1, fxIndex2);
 	);
 	
 	// Stop all notes, because their internal state is now in the wrong order
 	note = notes_start;
 	while (
-		note[0] = 0;
+		note[NOTE#ACTIVE] = 0;
 		note += notes_step;
 		note < notes_end;
 	);
 );
 function effect_note_setup(effect, note, notestate) (
-	effect[1] == FX_SPECLIST_INDEX#LFO ? (
+	effect[FX#SPEC_INDEX] == FX_SPECLIST_INDEX#LFO ? (
 		effect_note_setup_lfo(effect, note, notestate);
 	);
 );
 function effect_note_exec(effect, note, notestate) (
-	effect[1] == FX_SPECLIST_INDEX#LFO ? (
+	effect[FX#SPEC_INDEX] == FX_SPECLIST_INDEX#LFO ? (
 		effect_note_exec_lfo(effect, note, notestate);
 	);
 );
 
-function {effect_init}(effect_slot);
-function {config_ui}(effect);
-
-function reset_to_defaults() local(i, note_effect, effect_spec) (
+function reset_to_defaults() (
 	action_recompute = 1;
 	can_recompute = 1;
 	has_set_parameters = 1;
@@ -180,37 +218,11 @@ function reset_to_defaults() local(i, note_effect, effect_spec) (
 	param_sustain = 0.75;
 	param_release = 0.03;
 	param_env_linear = 0;
-	
-	i = 0;
-	while (
-		note_effect = fx_list_start + i*fx_list_step;
-		note_effect[0] = 0; // Disabled
-		i < fx_list_count;
-	);
-	note_effect = fx_list_start; // First slot
-	effect_spec = fx_spec_start + FX_SPECLIST_INDEX#LFO*fx_spec_step;
-	{effect_init:effect_spec[FX_HEADER#FUNC_INIT]}(note_effect);
+
+	fx_list_count = 0;
+	append_effect(FX_SPECLIST_INDEX#LFO);
 );
 !has_set_parameters ? reset_to_defaults();
-
-function log_to_slider(value, low, high) (
-	log(value/low)/log(high/low);
-);
-function slider_to_log(value, low, high) (
-	exp(log(low) + log(high/low)*value);
-);
-function range_to_slider(value, low, high) (
-	(value - low)/(high - low);
-);
-function slider_to_range(value, low, high) (
-	low + (high - low)*value;
-);
-function power_to_slider(value, low, high, power) (
-	pow((value - low)/(high - low), 1/power);
-);
-function slider_to_power(value, low, high, power) (
-	low + (high - low)*pow(value, power);
-);
 
 @block
 
@@ -304,7 +316,7 @@ recompute_index < wavetables_count ? (
 
 		// Place in wavetable
 		wavetable = wavetables_start + wavetable_step*wavetable_index;
-		wavetable[0] = base_freq*srate/wavetable_refsrate;
+		wavetable[WAVETABLE#FREQ] = base_freq*srate/wavetable_refsrate;
 		wavetable_samples = wavetable + wavetable_headerlength;
 		assignedwavetable = wavetable;
 		i = 0;
@@ -313,8 +325,6 @@ recompute_index < wavetables_count ? (
 			i += 1;
 			i < wavetable_sampleslength*2;
 		);
-		first = fftblock[0];
-		first2 = wavetable_samples[0];
 		
 		wavetable_index += 1;
 		wavetable_index < recompute_stop_index;
@@ -333,16 +343,16 @@ midi_event ? while (
 		// Note on
 		note = notes_start;
 		while (
-			note[0] ? (
+			note[NOTE#ACTIVE] ? (
 				note += notes_step;
 				note < notes_end;
 			);
-			note[0] && note < notes_end;
+			note[NOTE#ACTIVE] && note < notes_end;
 		);
 		// Found a free slot
 		note < notes_end ? (
 			// Note parameters
-			note[0] = 1;
+			note[NOTE#ACTIVE] = 1;
 			note[NOTE#CHANNEL] = midi_channel;
 			note[NOTE#NOTE] = midi_msg2;
 			note[NOTE#VEL] = midi_msg3;
@@ -363,9 +373,7 @@ midi_event ? while (
 			while (
 				effect = fx_list_start + i*fx_list_step;
 				notestate = note + note_headerlength + note_fx_statelength*i;
-				effect[0] ? (
-					effect_note_setup(effect, note, notestate);
-				);
+				effect_note_setup(effect, note, notestate);
 				i += 1;
 				i < fx_list_count;
 			);
@@ -374,7 +382,7 @@ midi_event ? while (
 		// Note off 
 		note = notes_start;
 		while (
-			note[0] && note[NOTE#CHANNEL] == midi_channel && note[NOTE#NOTE] == midi_msg2 ? (
+			note[NOTE#ACTIVE] && note[NOTE#CHANNEL] == midi_channel && note[NOTE#NOTE] == midi_msg2 ? (
 				note[NOTE#SECONDSFROMEND] = max(note[NOTE#SECONDSFROMEND], -midi_offset*invsrate);
 			);
 			note += notes_step;
@@ -389,7 +397,7 @@ polyphony_current = 0;
 note = notes_start;
 note_active_end = notes_start;
 while (
-	note[0] ? (
+	note[NOTE_ACTIVE] ? (
 		polyphony_current += 1;
 		note_active_end = note + notes_step;
 	);
@@ -401,7 +409,7 @@ while (
 
 note = notes_start;
 while (
-	note[0] ? (
+	note[NOTE#ACTIVE] ? (
 		note[NOTE#SECONDSFROMSTART] > 0 ? (
 			secondsFromStart = note[NOTE#SECONDSFROMSTART];
 			secondsFromEnd = note[NOTE#SECONDSFROMEND];
@@ -413,9 +421,7 @@ while (
 			while (
 				effect = fx_list_start + i*fx_list_step;
 				notestate = note + note_headerlength + note_fx_statelength*i;
-				effect[0] ? (
-					effect_note_exec(effect, note, notestate);
-				);
+				effect_note_exec(effect, note, notestate);
 				i += 1;
 				i < fx_list_count;
 			);
@@ -440,7 +446,7 @@ while (
 			secondsFromEnd > 0 ? (
 				secondsFromEnd > release ? (
 					env = 0;
-					note[0] = 0;
+					note[NOTE#ACTIVE] = 0;
 				) : (
 					env *= 1 - secondsFromEnd/release;
 				);
@@ -463,7 +469,7 @@ while (
 			highvalue = wavetable_samples[2*highsample + 1];
 			midvalueR = lowvalue + (highvalue - lowvalue)*ratio;
 			
-			wavetable_freq = wavetable[0];
+			wavetable_freq = wavetable[WAVETABLE#FREQ];
 			freqRatio = note[NOTE#FREQ]/wavetable_freq;
 
 			midsample += freqRatio;
@@ -632,3 +638,124 @@ ui_screen() == "main" ? (
 	effect_ui = g_effect_spec[FX_HEADER#CONFIG_UI_FUNCTION];
 	{config_ui:effect_ui}(g_effect);
 ) : ui_system();
+
+@serialize
+
+function read_plain_var() local(var_length, value) (
+	file_var(0, var_length);
+	var_length ? while(
+		file_var(0, value);
+		var_length -= 1;
+		var_length;
+	);
+	value;
+);
+function read_string_var(string) local(vars_read, char_count, char, string_length) (
+	strcpy(string, "");
+	string_length = 0;
+	vars_read = 1;
+	file_var(0, char_count);
+	char_count > 0 ? while(
+		file_var(0, char);
+		vars_read += 1;
+		str_setchar(string, string_length, char);
+		char_count -= 1;
+		char_count > 0;
+	);
+	vars_read;
+);
+function read_effect() local(read_length, effect, spec_index, var_id, i, var_length) (
+	fx_list_count < fx_list_maxcount ? (
+		file_var(0, read_length);
+		
+		file_var(0, spec_index);
+		read_length -= 1;
+		// TODO: check that the effect is a known type, otherwise put a placeholder in so the indices don't get screwed up (and remove placeholders at the end)
+		
+		effect = append_effect(spec_index);
+		
+		read_length > 0 ? while(
+			file_var(0, var_id);
+			read_length -= 1;
+			var_id == VAR_ID#effect_name ? (
+				// Make sure it's pointing to a mutable string slot
+				effect[FX#NAME] = string_slot(effect[FX#NAME]);
+				// Read the variable into that slot
+				read_length -= read_string_var(effect[FX#NAME]);
+			) : var_id == VAR_ID#effect_state && effect >= 0? (
+				file_var(0, var_length);
+				read_length -= var_length + 1;
+				effectstate = effect + fx_list_headerlength;
+				i = 0;
+				while (
+					file_var(0, effectstate[i]);
+					i += 1;
+					i < var_length;
+				);
+			) : (
+				ui_error("Unrecognised variable in effect");
+				// Consume the data so we don't get out-of-sync and screw up the rest of the config in a potentially painful way
+				file_var(0, var_length);
+				read_length -= var_length + 1;
+				var_length > 0 ? while (
+					file_var(0, i);
+					var_length -= 1;
+					var_length > 0;
+				);
+			);
+			read_length > 0;
+		);
+	) : (
+		read_plain_var();
+	);
+);
+function read_var() local(var_id, i, effect) (
+	file_var(0, var_id);
+	var_id == VAR_ID#param_width_cents(1) ? (
+		param_width_cents = read_plain_var();
+	) : var_id == VAR_ID#param_env_linear(99) ? (
+		param_env_linear = read_plain_var();
+	) : var_id == VAR_ID#param_attack(100) ? (
+		param_attack = read_plain_var();
+	) : var_id == VAR_ID#param_decay(101) ? (
+		param_decay = read_plain_var();
+	) : var_id == VAR_ID#param_sustain(102) ? (
+		param_sustain = read_plain_var();
+	) : var_id == VAR_ID#param_release(103) ? (
+		param_release = read_plain_var();
+	) : var_id == VAR_ID#effect ? (
+		read_effect();
+	) : (
+		ui_error("Unrecognised variable in state");
+		read_plain_var();
+	);
+);
+function write_plain_var(var_id, value) local(length) (
+	length = 1;
+	file_var(0, var_id);
+	file_var(0, 1);
+	file_var(0, value);
+);
+
+// Actual logic
+file_avail(0) >= 0 ? (
+	debug_reset += 1;
+	debug.reset_file_avail = file_avail(0);
+	reset_to_defaults();
+	file_avail(0) ? (
+		fx_list_count = 0;
+		while (
+			read_var();
+			file_avail(0);
+		);
+	);
+	clear_all_notes();
+	action_recompute = 1;
+) : (
+	write_plain_var(VAR_ID#param_width_cents, param_width_cents);
+	write_plain_var(VAR_ID#param_attack, param_attack);
+	write_plain_var(VAR_ID#param_decay, param_decay);
+	write_plain_var(VAR_ID#param_sustain, param_sustain);
+	write_plain_var(VAR_ID#param_release, param_release);
+	write_plain_var(VAR_ID#param_env_linear, param_env_linear);
+);
