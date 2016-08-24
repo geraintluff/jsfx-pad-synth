@@ -79,6 +79,10 @@ You must *always* perform the `ui_screen()` check, even if you only have one scr
 
 There are some built-in screen IDs which are handled by ui_system();
 
+### `ui_screen_level()`
+
+Returns how many screens are below this one in the stack
+
 ### `ui_system()`
 
 This is the fallback function you must call if you have not rendered a screen.  It displays errors and other built-in screens.
@@ -147,9 +151,19 @@ ui_fill(0, 0, 0); // Does not overwrite the footer
 
 These are the same as `ui_split_top()` etc., except instead of a pixel height you specify a ratio of the current viewport width/height.
 
+### `ui_pad(pixels)`
+
+This insets the current viewport by this much in each direction.
+
+It does *not* change the stack.
+
 ## Graphics
 
 These do not add or remove anything to the stack.  Instead, they modify the current drawing layer (and any later layers that inherit from it).
+
+### `ui_fontsize(pixels)`, `ui_fontbold(isBold)` and `ui_fontitalic(isItalic)`
+
+Changes properties of the font.
 
 ### `ui_align(halign, valign)`
 
@@ -160,6 +174,22 @@ The default alignment is `(0.5, 0.5)`, which is the middle.
 ### `ui_text(string)`
 
 Renders a string aligned within the current element.
+
+Returns the width of the rendered text;
+
+### `ui_text_width(string)` and `ui_text_height(string)`
+
+String width and height using the current font settings.
+
+### `ui_wraptext(string)`
+
+Renders wrapped text (breaks on whitespace), aligned within the current element.
+
+Returns height of the rendered text.
+
+### `ui_wraptext_height(string)`
+
+Height of wrapped text using the current font settings.
 
 ### `ui_fill(r, b, g)`
 
