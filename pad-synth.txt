@@ -779,7 +779,7 @@ function write_effects() local(i, effect, var_id, var_length) (
 		var_id = VAR_ID#effect;
 		var_length = 1; // Index
 		var_length += 2 + strlen(effect[FX#NAME]);
-		//var_length += 2 + fx_list_statelength;
+		var_length += 2 + fx_list_statelength;
 		
 		file_var(0, var_id);
 		file_var(0, var_length);
@@ -787,7 +787,7 @@ function write_effects() local(i, effect, var_id, var_length) (
 		
 		file_var(0, effect[FX#SPEC_INDEX]);
 		write_string_var(VAR_ID#effect_name, effect[FX#NAME]);
-		//write_buffer_var(VAR_ID#effect_state, effect + fx_list_headerlength, fx_list_statelength);
+		write_buffer_var(VAR_ID#effect_state, effect + fx_list_headerlength, fx_list_statelength);
 		
 		i += 1;
 		i < fx_list_count;
