@@ -45,7 +45,7 @@ fx_spec_step = fx_spec_headerlength + fx_spec_modlength*fx_spec_var_count;
 fx_spec_end = fx_spec_start + fx_spec_step*fx_spec_count;
 
 fx_list_start = fx_spec_end;
-fx_list_count = 0;
+//fx_list_count = 0; // Don't actually reset it here, it'll wipe all effects on playback restart!
 fx_list_maxcount = 10;
 fx_list_headerlength = FX##;
 fx_list_statelength = 16;
@@ -106,7 +106,9 @@ modspec[FX_MOD#RANGE] = 1;
 effectspec[FX_HEADER#FUNC_INIT] = {effect_init}effect_init_lfo;
 function effect_init_lfo(effect) local(mods, state) (
 	effect[FX#SPEC_INDEX] = FX_SPECLIST_INDEX#LFO;
-	effect[FX#NAME] = "LFO Modulator";
+	
+	sprintf(#lfo_name, "LFO Modulator (%f)", rand());
+	effect[FX#NAME] = #lfo_name;
 	
 	state = effect + fx_list_headerlength;
 	state[LFO_STATE#MOD_EFFECT(0)] = -1; // Initial target: note itself
@@ -174,13 +176,14 @@ function {config_ui}(effect);
 function append_effect(index) local(spec, effect) (
 	debug.append_effect += 1;
 	fx_list_count < fx_list_maxcount ? (
+		debug.append_effect_success += 1;
 		// TODO: check the index is valid, otherwise insert placeholder (negative index)
 		effect = fx_list_start + fx_list_step*fx_list_count;
 		fx_list_count += 1;
 		spec = fx_spec_start + fx_spec_step*index;
 		{effect_init:spec[FX_HEADER#FUNC_INIT]}(effect);
-	);
-	-1;
+		effect;
+	) : 0; // This should be checked first, otherwise you'll overwrite the fft area
 );
 // TODO: make these use function references
 function effect_swap(effect, fxIndex1, fxIndex2) local(note) (
@@ -370,7 +373,7 @@ midi_event ? while (
 			
 			// FX note setup
 			i = 0;
-			while (
+			i < fx_list_count ? while (
 				effect = fx_list_start + i*fx_list_step;
 				notestate = note + note_headerlength + note_fx_statelength*i;
 				effect_note_setup(effect, note, notestate);
@@ -418,7 +421,7 @@ while (
 			
 			// FX note setup
 			i = 0;
-			while (
+			i < fx_list_count ? while (
 				effect = fx_list_start + i*fx_list_step;
 				notestate = note + note_headerlength + note_fx_statelength*i;
 				effect_note_exec(effect, note, notestate);
@@ -566,6 +569,8 @@ ui_screen() == "main" ? (
 			);
 		ui_split_next();
 			display_first_effect = fx_list_start;
+			debug.display.effect = display_first_effect;
+			debug.display.effect_name = display_first_effect[FX#NAME];
 			control_button(display_first_effect[FX#NAME]) ? (
 				ui_screen_open("edit-effect");
 				ui_screen_set(0, display_first_effect);
@@ -653,18 +658,18 @@ function read_plain_var() local(var_length, value) (
 function read_string_var(string) local(vars_read, char_count, char, string_length) (
 	strcpy(string, "");
 	string_length = 0;
-	vars_read = 1;
 	file_var(0, char_count);
-	char_count > 0 ? while(
+	debug.read_string.char_count = char_count;
+	vars_read = 1 + char_count;
+	string_length < char_count ? while (
 		file_var(0, char);
-		vars_read += 1;
 		str_setchar(string, string_length, char);
-		char_count -= 1;
-		char_count > 0;
+		string_length += 1;
+		string_length < char_count;
 	);
 	vars_read;
 );
-function read_effect() local(read_length, effect, spec_index, var_id, i, var_length) (
+function read_effect() local(read_length, effect, spec_index, var_id, i, var_length, value) (
 	fx_list_count < fx_list_maxcount ? (
 		file_var(0, read_length);
 		
@@ -676,24 +681,31 @@ function read_effect() local(read_length, effect, spec_index, var_id, i, var_len
 		
 		read_length > 0 ? while(
 			file_var(0, var_id);
+			debug.read_effect.var_id = var_id;
 			read_length -= 1;
 			var_id == VAR_ID#effect_name ? (
 				// Make sure it's pointing to a mutable string slot
 				effect[FX#NAME] = string_slot(effect[FX#NAME]);
+				debug.read_effect.effect = effect;
+				debug.effect_name_slot = effect[FX#NAME];
+				debug.effect_name_strlen1 = strlen(effect[FX#NAME]);
 				// Read the variable into that slot
 				read_length -= read_string_var(effect[FX#NAME]);
-			) : var_id == VAR_ID#effect_state && effect >= 0? (
+				debug.effect_name_strlen2 = strlen(effect[FX#NAME]);
+			) : var_id == VAR_ID#effect_state && effect >= 0 ? (
 				file_var(0, var_length);
 				read_length -= var_length + 1;
 				effectstate = effect + fx_list_headerlength;
 				i = 0;
-				while (
-					file_var(0, effectstate[i]);
+				i < var_length ? while (
+					file_var(0, value);
+					effectstate[i] = value;
 					i += 1;
 					i < var_length;
 				);
 			) : (
-				ui_error("Unrecognised variable in effect");
+				sprintf(#read_effect_error, "Unrecognised ID in effect: %f", var_id);
+				ui_error(#read_effect_error);
 				// Consume the data so we don't get out-of-sync and screw up the rest of the config in a potentially painful way
 				file_var(0, var_length);
 				read_length -= var_length + 1;
@@ -733,8 +745,53 @@ function read_var() local(var_id, i, effect) (
 function write_plain_var(var_id, value) local(length) (
 	length = 1;
 	file_var(0, var_id);
-	file_var(0, 1);
+	file_var(0, length);
 	file_var(0, value);
+);
+function write_string_var(var_id, string) local(string_length, i, char) (
+	file_var(0, var_id);
+	string_length = strlen(string);
+	file_var(0, string_length);
+	i = 0;
+	i < string_length ? while(
+		char = str_getchar(string, i);
+		file_var(0, char);
+		i += 1;
+		i < string_length;
+	);
+);
+function write_buffer_var(var_id, buffer, length) local(i, value) (
+	file_var(0, var_id);
+	file_var(0, length);
+	i = 0;
+	i < length ? while(
+		value = buffer[i];
+		file_var(0, value);
+		i += 1;
+		i < length;
+	);
+);
+function write_effects() local(i, effect, var_id, var_length) (
+	i = 0;
+	i < fx_list_count ? while(
+		effect = fx_list_start + fx_list_step*i;
+
+		var_id = VAR_ID#effect;
+		var_length = 1; // Index
+		var_length += 2 + strlen(effect[FX#NAME]);
+		//var_length += 2 + fx_list_statelength;
+		
+		file_var(0, var_id);
+		file_var(0, var_length);
+		debug.write_effects.var_length = var_length;
+		
+		file_var(0, effect[FX#SPEC_INDEX]);
+		write_string_var(VAR_ID#effect_name, effect[FX#NAME]);
+		//write_buffer_var(VAR_ID#effect_state, effect + fx_list_headerlength, fx_list_statelength);
+		
+		i += 1;
+		i < fx_list_count;
+	);
 );
 
 // Actual logic
@@ -758,4 +815,5 @@ file_avail(0) >= 0 ? (
 	write_plain_var(VAR_ID#param_sustain, param_sustain);
 	write_plain_var(VAR_ID#param_release, param_release);
 	write_plain_var(VAR_ID#param_env_linear, param_env_linear);
+	write_effects();
 );

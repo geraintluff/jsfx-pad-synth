@@ -222,7 +222,7 @@ function ui_system() local(text, error, screen) (
 		gfx_g = gfx_b = 0;
 		gfx_x = gfx_y = gfx_texth;
 		screen = uix_screenstack + uix_screenstack_step*uix_screenstack_currentlayer;
-		error = screen[UI_SCREEN#ID];
+		error = screen[UI_SCREEN#]; // First argument
 		strlen(error) ? (
 			gfx_printf("Error: %s\n(%f)", error, error);
 		) : (
