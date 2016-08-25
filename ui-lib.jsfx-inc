@@ -269,6 +269,10 @@ function ui_right() (
 
 /////// Drawing operations ///////
 
+function ui_color_set() (
+	uix_setgfxcolor();
+);
+
 function ui_color(r, g, b) (
 	uix_drawconfig_current[uix_DRAWCONFIG#RED] = r;
 	uix_drawconfig_current[uix_DRAWCONFIG#GREEN] = g;
@@ -277,9 +281,25 @@ function ui_color(r, g, b) (
 	uix_setgfxcolor();
 );
 
+function ui_colora(r, g, b, a) (
+	uix_drawconfig_current[uix_DRAWCONFIG#RED] = r;
+	uix_drawconfig_current[uix_DRAWCONFIG#GREEN] = g;
+	uix_drawconfig_current[uix_DRAWCONFIG#BLUE] = b;
+	uix_drawconfig_current[uix_DRAWCONFIG#ALPHA] = a;
+	uix_setgfxcolor();
+);
+
 function ui_align(halign, valign) (
-	uix_drawconfig_current[uix_DRAWCONFIG#HALIGN] = halign;
-	uix_drawconfig_current[uix_DRAWCONFIG#VALIGN] = valign;
+	halign >= 0 && halign <= 1 ? uix_drawconfig_current[uix_DRAWCONFIG#HALIGN] = halign;
+	valign >= 0 && valign <= 1 ? uix_drawconfig_current[uix_DRAWCONFIG#VALIGN] = valign;
+);
+
+function ui_halign() (
+	uix_drawconfig_current[uix_DRAWCONFIG#HALIGN];
+);
+
+function ui_valign() (
+	uix_drawconfig_current[uix_DRAWCONFIG#VALIGN];
 );
 
 function ui_fontsize(size) (
@@ -329,15 +349,19 @@ function ui_texth() (
 );
 
 function ui_text_width(text) local(text_h, text_w) (
-	uix_setgfxfont();
-	gfx_measurestr(text, text_w, text_h);
-	text_w;
+	text >= 0 ? (
+		uix_setgfxfont();
+		gfx_measurestr(text, text_w, text_h);
+		text_w;
+	) : ui_texth();
 );
 
 function ui_text_height(text) local(text_h, text_w) (
-	uix_setgfxfont();
-	gfx_measurestr(text, text_w, text_h);
-	text_h;
+	text >= 0 ? (
+		uix_setgfxfont();
+		gfx_measurestr(text, text_w, text_h);
+		text_h;
+	) : ui_texth();
 );
 
 function ui_text(text) local (text_h, text_w, boxwidth, boxheight, valign, halign, fontscale, fontsize) (
@@ -748,6 +772,14 @@ function ui_padding(hpadding, vpadding) (
 	vpadding >= 0 ? uix_drawconfig_current[uix_DRAWCONFIG#VPADDING] = vpadding;
 );
 
+function ui_hpadding() (
+	uix_drawconfig_current[uix_DRAWCONFIG#HPADDING];
+);
+
+function ui_vpadding() (
+	uix_drawconfig_current[uix_DRAWCONFIG#VPADDING];
+);
+
 //////// Mouse functions ////////
 
 function uix_click1wasinside() (
@@ -845,6 +877,43 @@ function control_gloss(strength) local(height, topalpha, bottomalpha) (
 	);
 );
 
+function control_inset(strength) local(height, topalpha, bottomalpha) (
+	// Black fade
+	height = min(5, ui_height()/2);
+	topalpha = strength*0.1;
+	bottomalpha = 0;
+	gfx_gradrect(
+		ui_left(), ui_top(), ui_width(), height,
+		0, 0, 0, topalpha,
+		0, 0, 0, 0,
+		0, 0, 0, (bottomalpha - topalpha)/height
+	);
+	// White fade
+	height = min(5, ui_height()/2);
+	topalpha = 0;
+	bottomalpha = strength*0.3;
+	gfx_gradrect(
+		ui_left(), ui_bottom() - height, ui_width(), height,
+		1, 1, 1, topalpha,
+		0, 0, 0, 0,
+		0, 0, 0, (bottomalpha - topalpha)/height
+	);
+);
+
+function control_softborder() (
+	ui_push();
+		ui_colora(0, 0, 0, 0.1);
+		ui_border();
+	ui_pop();
+);
+
+function control_hardborder() (
+	ui_push();
+		ui_colora(0, 0, 0, 0.3);
+		ui_border();
+	ui_pop();
+);
+
 function control_indicator_button(text, status) local(click, shade, red, green, blue) (
 	ui_push();
 		shade = status ? uix_control_shade() : 1;
@@ -854,14 +923,13 @@ function control_indicator_button(text, status) local(click, shade, red, green, 
 		blue = status ? uix_control_blue : uix_control_disabled_blue;
 		
 		ui_fill(red*shade, green*shade, blue*shade);
-		shade *= 0.9;
-		ui_color(red*shade, green*shade, blue*shade);
-		ui_border_right();
-		ui_border_left();
 
 		ui_color(255, 255, 255);
 		ui_text(text);
 		status ? control_gloss(1);
+		
+		control_softborder();
+
 		click = ui_click();
 	ui_pop();
 	click;
@@ -871,12 +939,88 @@ function control_button(text) (
 	control_indicator_button(text, 1);
 );
 
-function control_navbar(title, next_screen, next_title) local(click) (
+function control_arrow(direction) local(size, tmp, centerx, centery, point1x, point1y, point2x, point2y, point3x, point3y) ( // left, up, right, down
+	debug.arrow_alpha = uix_drawconfig_current[uix_DRAWCONFIG#ALPHA];
+	debug.arrow_red = uix_drawconfig_current[uix_DRAWCONFIG#RED];
+	size = min(ui_height(), ui_width());
+	direction == 0 ? (
+		centerx = size/2;
+		centery = ui_height()/2;
+	) : direction == 1 ? (
+		centerx = ui_width()/2;
+		centery = size/2;
+	) : direction == 2 ? (
+		centerx = ui_width() - size/2;
+		centery = ui_height()/2;
+	) : (
+		centerx = ui_width()/2;
+		centery = ui_height() - size/2;
+	);
+	centerx += ui_left();
+	centery += ui_top();
+
+	size = min(size, ui_texth());
+	size *= 0.5;
+	angle = direction*$pi/2;
+	
+	// Draw facing upwards to start
+	point1x = 0;
+	point1y = 0.5*size*(direction >= 2 ? 1 : -1);
+	point2x = -0.5*size;
+	point2y = -point1y;
+	point3x = 0.5*size;
+	point3y = -point1y;
+	direction == 0 || direction == 2 ? (
+		// Swap X and Y
+		tmp = point1x;
+		point1x = point1y;
+		point1y = tmp;
+		tmp = point2x;
+		point2x = point2y;
+		point2y = tmp;
+		tmp = point3x;
+		point3x = point3y;
+		point3y = tmp;
+	);
+
+	ui_color_set();
+	gfx_triangle(centerx + point1x, centery + point1y, centerx + point2x, centery + point2y, centerx + point3x, centery + point3y);
+);
+
+function control_selector(value, text, next_value, prev_value) local(buttonwidth) (
+	ui_push();
+		ui_fill(255, 255, 255);
+		buttonwidth = min(ui_height()/2, ui_width()/2);
+		
+		ui_halign() <= 0.5 ? ui_split_left(buttonwidth) : ui_split_right(buttonwidth);
+			ui_colora(255, 255, 255, 0.8);
+			ui_split_topratio(0.5);
+				control_button("") ? value = next_value;
+				control_arrow(1);
+			ui_pop();
+			control_button("") ? value = prev_value;
+			control_arrow(3);
+		ui_pop();
+		ui_color(0, 0, 0);
+		ui_push();
+			ui_padleft();
+			ui_padright();
+			ui_text(text);
+		ui_pop();
+
+		control_inset(1);
+		control_softborder();
+	ui_pop();
+	control_hardborder();
+	value;
+);
+
+function control_navbar(title, next_title, next_screen) local(click) (
 	ui_split_toptext(title);
 		ui_fill(255, 255, 255);
 		control_gloss(0.5);
-		ui_color(160, 160, 160);
-		ui_border_bottom();
+		control_softborder();
+
 		ui_color(0, 0, 0);
 		title ? (
 			ui_text(title);
@@ -911,9 +1055,6 @@ function control_hslider(value, range_low, range_high, curve) local(ratio, shade
 	);
 	ui_push();
 		ui_fill(255, 255, 255);
-		ui_color(0, 0, 0);
-		ui_border();
-		ui_pad1(2);
 		
 		shade = uix_control_shade();
 		ui_color(uix_control_red*shade, uix_control_green*shade, uix_control_blue*shade);
@@ -930,6 +1071,7 @@ function control_hslider(value, range_low, range_high, curve) local(ratio, shade
 			);
 		);
 		control_gloss(1);
+		control_hardborder();
 	ui_pop();
 	value;
 );

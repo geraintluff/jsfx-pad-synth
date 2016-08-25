@@ -107,8 +107,7 @@ effectspec[FX_HEADER#FUNC_INIT] = {effect_init}effect_init_lfo;
 function effect_init_lfo(effect) local(mods, state) (
 	effect[FX#SPEC_INDEX] = FX_SPECLIST_INDEX#LFO;
 	
-	sprintf(#lfo_name, "LFO Modulator (%f)", rand());
-	effect[FX#NAME] = #lfo_name;
+	effect[FX#NAME] = "LFO Modulator";
 	
 	state = effect + fx_list_headerlength;
 	state[LFO_STATE#MOD_EFFECT(0)] = -1; // Initial target: note itself
@@ -147,7 +146,7 @@ function effect_note_setup_lfo(effect, note, notestate) local(state, targetIndex
 	notestate[LFO_NOTE_STATE#AMP] = state[LFO_STATE#AMP]; // amp
 	
 	targetIndex = state[LFO_STATE#MOD_EFFECT] < 0 ? (
-		state[LFO_STATE#MOD_INDEX] == 0 ? NOTE#FREQ : NOTE#AMP;
+		state[LFO_STATE#MOD_INDEX] == 0 ? NOTE#LOG_FREQ : NOTE#AMP;
 	) : (
 		0;
 	);
@@ -361,11 +360,11 @@ midi_event ? while (
 			note[NOTE#VEL] = midi_msg3;
 			note[NOTE#SECONDSFROMSTART] = -midi_offset*invsrate;
 			note[NOTE#SECONDSFROMEND] = -note_maxduration;
-			note[NOTE#FREQ_BASE] = 440*pow(2, (note[NOTE#NOTE] - 69)/12);
+			note[NOTE#LOG_FREQ_BASE] = log(440*pow(2, (note[NOTE#NOTE] - 69)/12));
 			note[NOTE#AMP_BASE] = volume*note[NOTE#VEL]/127;
 			
 			// Wavetable params
-			wavetable_index = log(note[NOTE#FREQ_BASE]/wavetable_low)/log(wavetable_high/wavetable_low)*wavetables_count;
+			wavetable_index = (note[NOTE#LOG_FREQ_BASE] - log(wavetable_low))/log(wavetable_high/wavetable_low)*wavetables_count;
 			wavetable_index = min(wavetables_count - 1, max(0, floor(wavetable_index)));
 			note[NOTE#WAVEINDEX] = wavetable_index; // Wavetable #0
 			note[NOTE#SAMPLEPOS] = rand(wavetable_sampleslength);
@@ -416,7 +415,7 @@ while (
 		note[NOTE#SECONDSFROMSTART] > 0 ? (
 			secondsFromStart = note[NOTE#SECONDSFROMSTART];
 			secondsFromEnd = note[NOTE#SECONDSFROMEND];
-			note[NOTE#FREQ] = note[NOTE#FREQ_BASE];
+			note[NOTE#LOG_FREQ] = note[NOTE#LOG_FREQ_BASE];
 			note[NOTE#AMP] = note[NOTE#AMP_BASE];
 			
 			// FX note setup
@@ -430,7 +429,7 @@ while (
 			);
 
 			env = 1;
-			stretch = param_env_linear ? 1 : 2;
+			stretch = param_env_linear ? 1 : 1;
 			attack = param_attack;
 			decay = param_decay*stretch;
 			sustain = param_sustain;
@@ -473,7 +472,7 @@ while (
 			midvalueR = lowvalue + (highvalue - lowvalue)*ratio;
 			
 			wavetable_freq = wavetable[WAVETABLE#FREQ];
-			freqRatio = note[NOTE#FREQ]/wavetable_freq;
+			freqRatio = exp(note[NOTE#LOG_FREQ])/wavetable_freq;
 
 			midsample += freqRatio;
 			midsample > wavetable_sampleslength ? while (
@@ -549,7 +548,7 @@ function named_hslider(name, value, range_low, range_high, curve, displayvalue, 
 		ui_align(0, 0.5);
 		ui_textnumber(displayvalue, displayformat);
 	ui_pop();
-	ui_push_heighttext("");
+	ui_push_heighttext(-1);
 		value = control_hslider(value, range_low, range_high, curve);
 	ui_pop();
 	value;
@@ -634,6 +633,12 @@ ui_screen() == "main" ? (
 		param_sustain = named_hslider("Sustain", param_sustain, 0, 1, 1, floor(param_sustain*100 + 0.5), "%i%%");
 	ui_split_next();
 		param_release = named_hslider("Release", param_release, 0.005, 5, 3, floor(param_release*1000 + 0.5), "%ims");
+	ui_split_next();
+		ui_pad2(100, 0);
+		ui_push_heighttext("");
+			ui_align(0, -1);
+			param_env_linear = control_selector(param_env_linear, param_env_linear ? "Linear" : "Tapered", !param_env_linear, !param_env_linear);
+		ui_pop();
 	ui_pop();
 ) : ui_screen() == "edit-effect" ? (
 	g_effect = ui_screen_get(0);
@@ -645,6 +650,10 @@ ui_screen() == "main" ? (
 ) : ui_system();
 
 @serialize
+
+// Serialisation is a sequence of (id, length, value).  All unrecognised IDs (currently) result in an error.
+// We do our own string serialisation so that we can keep track of the length.
+// The VAR_ID enum values should always force a value
 
 function read_plain_var() local(var_length, value) (
 	file_var(0, var_length);
@@ -683,7 +692,7 @@ function read_effect() local(read_length, effect, spec_index, var_id, i, var_len
 			file_var(0, var_id);
 			debug.read_effect.var_id = var_id;
 			read_length -= 1;
-			var_id == VAR_ID#effect_name ? (
+			var_id == VAR_ID#effect_name(104) ? (
 				// Make sure it's pointing to a mutable string slot
 				effect[FX#NAME] = string_slot(effect[FX#NAME]);
 				debug.read_effect.effect = effect;
@@ -692,7 +701,7 @@ function read_effect() local(read_length, effect, spec_index, var_id, i, var_len
 				// Read the variable into that slot
 				read_length -= read_string_var(effect[FX#NAME]);
 				debug.effect_name_strlen2 = strlen(effect[FX#NAME]);
-			) : var_id == VAR_ID#effect_state && effect >= 0 ? (
+			) : var_id == VAR_ID#effect_state(105) && effect >= 0 ? (
 				file_var(0, var_length);
 				read_length -= var_length + 1;
 				effectstate = effect + fx_list_headerlength;
@@ -735,7 +744,7 @@ function read_var() local(var_id, i, effect) (
 		param_sustain = read_plain_var();
 	) : var_id == VAR_ID#param_release(103) ? (
 		param_release = read_plain_var();
-	) : var_id == VAR_ID#effect ? (
+	) : var_id == VAR_ID#effect(106) ? (
 		read_effect();
 	) : (
 		ui_error("Unrecognised variable in state");
@@ -776,7 +785,7 @@ function write_effects() local(i, effect, var_id, var_length) (
 	i < fx_list_count ? while(
 		effect = fx_list_start + fx_list_step*i;
 
-		var_id = VAR_ID#effect;
+		var_id = VAR_ID#effect(106);
 		var_length = 1; // Index
 		var_length += 2 + strlen(effect[FX#NAME]);
 		var_length += 2 + fx_list_statelength;
@@ -786,8 +795,8 @@ function write_effects() local(i, effect, var_id, var_length) (
 		debug.write_effects.var_length = var_length;
 		
 		file_var(0, effect[FX#SPEC_INDEX]);
-		write_string_var(VAR_ID#effect_name, effect[FX#NAME]);
-		write_buffer_var(VAR_ID#effect_state, effect + fx_list_headerlength, fx_list_statelength);
+		write_string_var(VAR_ID#effect_name(104), effect[FX#NAME]);
+		write_buffer_var(VAR_ID#effect_state(105), effect + fx_list_headerlength, fx_list_statelength);
 		
 		i += 1;
 		i < fx_list_count;
@@ -809,11 +818,11 @@ file_avail(0) >= 0 ? (
 	clear_all_notes();
 	action_recompute = 1;
 ) : (
-	write_plain_var(VAR_ID#param_width_cents, param_width_cents);
-	write_plain_var(VAR_ID#param_attack, param_attack);
-	write_plain_var(VAR_ID#param_decay, param_decay);
-	write_plain_var(VAR_ID#param_sustain, param_sustain);
-	write_plain_var(VAR_ID#param_release, param_release);
-	write_plain_var(VAR_ID#param_env_linear, param_env_linear);
+	write_plain_var(VAR_ID#param_width_cents(1), param_width_cents);
+	write_plain_var(VAR_ID#param_attack(100), param_attack);
+	write_plain_var(VAR_ID#param_decay(101), param_decay);
+	write_plain_var(VAR_ID#param_sustain(102), param_sustain);
+	write_plain_var(VAR_ID#param_release(103), param_release);
+	write_plain_var(VAR_ID#param_env_linear(99), param_env_linear);
 	write_effects();
 );
