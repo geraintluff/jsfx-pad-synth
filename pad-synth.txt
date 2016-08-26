@@ -2,6 +2,7 @@ desc:PadSynth
 in_pin:none;
 out_pin:Left
 out_pin:Right
+options:want_all_kb
 
 import ui-lib.jsfx-inc
 
@@ -722,9 +723,9 @@ ui_screen() == "main" ? (
 	while (g_effect_index < fx_list_maxcount) (
 		g_effect_index < fx_list_count ? (
 			g_effect = fx_list_start + fx_list_step*g_effect_index;
-			g_effectspec = fx_spec_start += fx_spec_step*g_effect[FX#SPEC_INDEX];
+			g_effect_spec = fx_spec_start += fx_spec_step*g_effect[FX#SPEC_INDEX];
 			ui_color(0, 0, 0);
-			ui_split_righttext("edit") ? (
+			ui_split_rightratio(0.15) ? (
 				control_button("edit") ? (
 					ui_screen_open("edit-effect");
 					ui_screen_set(0, g_effect);
@@ -765,7 +766,9 @@ ui_screen() == "main" ? (
 				// TODO: test drops with mouse_up();
 			);
 			
-			debug.draw_name = g_effect[FX#NAME];
+			strlen(g_effect[FX#NAME]) == 0 ? (
+				strcpy(g_effect[FX#NAME], g_effect_spec[FX_HEADER#NAME]);
+			);
 			g_drageffect_index == g_effect_index ? (
 				ui_color(160, 160, 160);
 				ui_fill();

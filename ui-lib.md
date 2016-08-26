@@ -11,31 +11,27 @@ membuffer_end = ui_setup(membuffer_start); // It needs some working memory
 ui_start("main"); // Default screen
 
 ui_screen() == "main" ? (
-	ui_text("Click me"); // Centres text in available space
-	ui_click() ? (
+	control_navbar("Main screen", -1, -1)
+	ui_split_topratio(0.5);
+		ui_textwrap("Here is some center-aligned wrapped text");
+	ui_pop();
+
+	control_button("Click me") ? (
 		ui_screen_open("slider");
 		ui_screen_set(0, 4.5); // Pass arguments between screens
 	);
 ) : ui_screen() == "slider" ? (
-	ui_split_top(50);
-		ui_background(255, 255, 255);
-		ui_border_bottom();
-		ui_text("Title");
-		// A "button" is composite component built from other elements
-		ui_button("back") ? (
-			ui_screen_close();
-		);
-	ui_pop();
+	control_navbar("Slider text", -1, -1);
 
 	// Split the screen into three vertical sliders
-	ui_split(3, 0); // split horizontally
-	myvar1 = ui_vslider(myvar1, -1, 1, 1); // Linear between 0 and 1
+	ui_split_leftratio(1/3); // split horizontally
+		myvar1 = ui_vslider(myvar1, 0, 1, 0); // Linear between 0 and 1
 	ui_split_next();
-	myvar2 = ui_vslider(myvar2, 0, 100, 2); // Squared (so 10% filled means a value of 1%)
+		myvar2 = ui_vslider(myvar2, 0, 100, 2); // Low-biased (better accuracy near 0)
 	ui_split_next();
-	myvar3 = ui_vslider(myvar3, 1, 100, 0); // Logarithmic
+		myvar3 = ui_vslider(myvar3, 1, 100, log(100/1)); // Logarithmic
 	ui_split_next();
-) : ui_system();
+) : control_system();
 ```
 
 ### `ui_setup(memstart)`
@@ -79,15 +75,17 @@ You must *always* perform the `ui_screen()` check, even if you only have one scr
 
 There are some built-in screen IDs which are handled by ui_system();
 
-### `ui_screen_level()`
+### `ui_screen_open(id)`
 
-Returns how many screens are below this one in the stack
+Opens the screen with the given ID.
 
-### `ui_system()`
+### `ui_screen_close()` and `ui_screen_close_id(id)`
 
-This is the fallback function you must call if you have not rendered a screen.  It displays errors and other built-in screens.
+Closes the a screen.  `ui_screen_close_id()` only closes the screen if the ID matches, which helps prevent closing screens under you if it ends up called twice.  It is recommended that you use `ui_screen_close_id()` where that is known.
 
-You should always have this - since JSFX has no exceptions or error-handling, this is way you'll be informed if you tell the UI to do something nonsensical.
+### `ui_screen_close_to(id)`
+
+Closes screens until the either the screen ID matches `id`, or the top level is reached.
 
 ### `ui_screen_get(index)` and `ui_screen_set(index, value)`
 
@@ -112,6 +110,16 @@ ui_screen_set(0, 1);
 ui_screen_set(1, 10);
 ui_screen_set(2, myarray);
 ```
+
+### `ui_screen_level()`
+
+Returns how many screens are below this one in the stack
+
+### `ui_system()`
+
+This is the fallback function you must call if you have not rendered a screen.  It displays errors and other built-in screens.
+
+You should always have this - since JSFX has no exceptions or error-handling, this is way you'll be informed if you tell the UI to do something nonsensical.
 
 ## Viewport and stack operations
 
@@ -353,7 +361,7 @@ There are also some pre-defined screens which are made available if you use `con
 
 *	`control.prompt` - first argument is a 
 
-### `control_navbar(title, next_screen, next_title)`
+### `control_navbar(title, next_title, next_screen)`
 
 Displays a navigation bar for the screen with a centred title, and "back" button if the screen is not top-level.  If `next_screen` is supplied, it displays a button on the right-hand side for navigating to the next page.
 
