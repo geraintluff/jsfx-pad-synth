@@ -16,6 +16,7 @@ uix_drawconfig_currentindex = -1;
 uix_mousecap_prev = 0;
 uix_mouseblocked = 0;
 uix_doubleclicktime = 0.2;
+uix_draglimit = 10;
 uix_click1 = uix_click2 = uix_click64 = 0;
 uix_unclick1 = uix_unclick2 = uix_unclick64 = 0;
 uix_click1_x = uix_click1_y = uix_click1_t = 0; // Left
@@ -343,14 +344,19 @@ function ui_fontitalic(isItalic) (
 );
 
 function ui_font(face, size, isBold, isItalic) (
-	face = face ? face : uix_drawconfig_current[uix_DRAWCONFIG#FONTFACE];
-	size = size ? size : uix_drawconfig_current[uix_DRAWCONFIG#FONTSIZE];
+	face = face >= 0 ? face : uix_drawconfig_current[uix_DRAWCONFIG#FONTFACE];
+	size = size >= 0 ? size : uix_drawconfig_current[uix_DRAWCONFIG#FONTSIZE];
 
 	uix_drawconfig_current[uix_DRAWCONFIG#FONTFACE] = face;
 	uix_drawconfig_current[uix_DRAWCONFIG#FONTSIZE] = size;
 	uix_drawconfig_current[uix_DRAWCONFIG#FONTBOLD] = isBold;
 	uix_drawconfig_current[uix_DRAWCONFIG#FONTITALIC] = isItalic;
 	uix_font_dirty = 1;
+	uix_setgfxfont();
+);
+
+function ui_font_refresh() (
+	uix_setgfxcolor();
 	uix_setgfxfont();
 );
 
@@ -522,10 +528,10 @@ function ui_border() (
 	uix_setgfxcolor();
 	gfx_x = ui_left();
 	gfx_y = ui_top();
-	gfx_lineto(gfx_x + ui_width() - 1, gfx_y);
-	gfx_lineto(gfx_x, gfx_y + ui_height() - 1);
-	gfx_lineto(ui_left(), gfx_y);
-	gfx_lineto(gfx_x, ui_top());
+	gfx_lineto(gfx_x + ui_width() - 1, gfx_y, 0);
+	gfx_lineto(gfx_x, gfx_y + ui_height() - 1, 0);
+	gfx_lineto(ui_left(), gfx_y, 0);
+	gfx_lineto(gfx_x, ui_top(), 0);
 );
 
 ///// Viewport stack operations /////
@@ -829,6 +835,10 @@ function ui_mouse_down() (
 	uix_click1 && ui_hover();
 );
 
+function ui_mouse_down_outside() (
+	uix_click1 && !ui_hover();
+);
+
 function ui_mouse_up() (
 	uix_unclick1 && ui_hover();
 );
@@ -837,9 +847,12 @@ function ui_click_clear() (
 	uix_click_block();
 );
 
-function ui_drag() (
+function ui_drag() local(dragtime) (
 	mouse_cap&1 && uix_click1wasinside() ? (
-		time_precise() - uix_click1_t;
+		dragtime = time_precise() - uix_click1_t;
+		dragtime >= uix_doubleclicktime || abs(uix_click1_x - mouse_x) >= uix_draglimit || abs(uix_click1_y - mouse_y) >= uix_draglimit ? (
+			dragtime;
+		) : 0;
 	) : 0;
 );
 
@@ -1124,76 +1137,199 @@ function control_hslider(value, range_low, range_high, curve_bias) local(valuera
 	value;
 );
 
-/*
-function control_text_left(text) (
-	ui_split_lefttext(text);
-		ui_text(text);
+function control_dialog(title, width, height) (
+	ui_push();
+		ui_colora(0, 0, 0, 0.2);
+		ui_fill();
 	ui_pop();
-);
-function control_label_left(text) local(width) (
-	ui_split_leftratio(uix_control_labelratio);
-		ui_padright();
-		ui_align(1, -1);
-		ui_text(text);
-	ui_pop();
-);
-function control_label_leftnumber(value, format) (
-	sprintf(#control_label, format, value);
-	control_label_left(#control_label);
-);
 
-function control_text_right(text) (
-	ui_split_righttext(text);
-		ui_text(text);
+	!width ? width = ui_width()*0.8;
+	!height ? height = ui_height()*0.8;
+	
+	title >= 0 ? height += ui_text_height(title) + ui_vpadding()*2;
+	
+	width = min(width + ui_hpadding()*2, ui_width());
+	height = min(height + ui_vpadding()*2, ui_height());
+	ui_pad2((ui_width() - width)/2, (ui_height() - height)/2);
+	ui_push();
+		ui_color(242, 242, 242);
+		ui_fill();
 	ui_pop();
-);
-function control_label_right(text) local(width) (
-	ui_split_rightratio(uix_control_labelratio);
-		ui_padleft();
-		ui_align(0, -1);
-		ui_text(text);
-	ui_pop();
-);
-function control_label_rightnumber(value, format) (
-	sprintf(#control_label, format, value);
-	control_label_right(#control_label);
-);
-
-function control_text_top(text) (
-	ui_split_toptext(text);
-		ui_text(text);
-	ui_pop();
-);
-function control_label_top(text) (
-	ui_split_toptext(-1);
-		ui_padbottom();
-		ui_align(-1, 1);
-		ui_text(text);
-	ui_pop();
-);
-function control_label_topnumber(value, format) (
-	sprintf(#control_label, format, value);
-	control_label_top(#control_label);
-);
-
-function control_text_bottom(text) (
-	ui_split_bottomtext(text);
-		ui_text(text);
-	ui_pop();
-);
-function control_label_bottom(text) (
+	control_border();
 	ui_split_bottomtext(-1);
-		ui_padtop();
-		ui_align(-1, 0);
-		ui_text(text);
+		control_button("done") ? ui_screen_close();
 	ui_pop();
+	
+	title >= 0 ? (
+		ui_split_toptext(title);
+			ui_color(255, 255, 255);
+			ui_fill();
+			ui_color(0, 0, 0);
+			control_border();
+			ui_text(title);
+			control_finish_enabled(0.5);
+		ui_pop();
+	);
+	
+	ui_pad();
 );
-function control_label_bottomnumber(value, format) (
-	sprintf(#control_label, format, value);
-	control_label_bottom(#control_label);
-);
-*/
 
-function control_system() (
-	ui_system();
+function uix_control_closest_substring_width(text, targetwidth) local(text_length, best_index, best_width, i, candidatewidth) (
+	best_index = 0;
+	best_width = 0;
+	
+	i = 0;
+	text_length = strlen(text);
+	while (i <= text_length) (
+		strcpy_substr(#uix_control_closest_substring_width, text, 0, i);
+		candidatewidth = ui_text_width(#uix_control_closest_substring_width);
+		abs(candidatewidth - targetwidth) <= abs(best_width - targetwidth) ? (
+			best_width = candidatewidth;
+			best_index = i;
+		);
+		i += 1;
+	);
+	best_index;
+);
+
+function control_system() local(prompt_title, prompt_text, prompt_init, prompt_selectstart, prompt_selectend, textx, texty, selectw, t, char) (
+	ui_screen() == "control.prompt" ? (
+		prompt_text = ui_screen_get(0);
+		prompt_title = ui_screen_get(1);
+		prompt_init = ui_screen_get(2);
+		prompt_selectstart = ui_screen_get(3);
+		prompt_selectend = ui_screen_get(4);
+		prompt_select1 = ui_screen_get(5);
+		prompt_select2 = ui_screen_get(6);
+		!prompt_init ? (
+			prompt_init = 1;
+			prompt_selectstart = prompt_selectend = strlen(prompt_text);
+			prompt_selectstart = 5;
+			prompt_selectend = 10;
+		);
+
+		control_dialog(prompt_title, 0, (ui_texth() + ui_vpadding()*2)*3);
+
+		ui_push_heighttext(-1);
+			ui_align(0, 0.5);
+			control_color_fill_inset();
+			ui_fill();
+			
+			control_color_text_inset();
+			ui_push();
+				ui_pad();
+				textx = ui_left();
+				texty = ui_top();
+				gfx_x = textx;
+				gfx_y = texty;
+
+				ui_font_refresh();
+
+				strcpy_substr(#control_system_prompt, prompt_text, 0, prompt_selectstart);
+				gfx_drawstr(#control_system_prompt);
+				
+				debug.prompt_selectstart = prompt_selectstart;
+				debug.prompt_selectend = prompt_selectend;
+				prompt_selectend > prompt_selectstart ? (
+					strcpy_substr(#control_system_prompt, prompt_text, prompt_selectstart, prompt_selectend - prompt_selectstart);
+					selectw = ui_text_width(#control_system_prompt);
+					ui_push();
+						control_color_fill_enabled();
+						gfx_rect(gfx_x, ui_top(), selectw, ui_height());
+						control_color_text_enabled();
+						gfx_drawstr(#control_system_prompt);
+					ui_pop();
+					ui_font_refresh();
+				) : (
+					t = time_precise();
+					t = t - floor(t);
+					prompt_selectend == prompt_selectstart ? t > 0.5 ? (
+						gfx_line(gfx_x, ui_top(), gfx_x, ui_bottom());
+					);
+					debug.time = time_precise();
+				);
+
+				strcpy_from(#control_system_prompt, prompt_text, max(prompt_selectstart, prompt_selectend));
+				gfx_drawstr(#control_system_prompt);
+			ui_pop();
+			
+			control_finish_inset(1);
+			
+			ui_mouse_down() ? (
+				prompt_select1 = uix_control_closest_substring_width(prompt_text, ui_mouse_x() - ui_hpadding());
+				prompt_selectstart = prompt_selectend = prompt_select1;
+			);
+			ui_drag() ? (
+				prompt_select2 = uix_control_closest_substring_width(prompt_text, ui_mouse_x() - ui_hpadding());
+				prompt_selectstart = min(prompt_select1, prompt_select2);
+				prompt_selectend = max(prompt_select1, prompt_select2);
+			);
+			ui_click() && ui_clickcount() == 2 ? (
+				ui_click_clear();
+				prompt_selectstart = 0;
+				prompt_selectend = strlen(prompt_text);
+			);
+			
+			ui_mouse_down_outside() ? (
+				prompt_selectstart = strlen(prompt_text);
+				prompt_selectend = -1; // No cursor
+			);
+			
+			prompt_selectend >= prompt_selectstart ? (
+				char = gfx_getchar();
+				char > 0 ? debug.allchar = char;
+				
+				char > 0 ? (
+					char >= 32 && char < 128 ? (
+						strcpy_substr(#control_system_prompt, prompt_text, 0, prompt_selectstart);
+						str_setchar(#control_system_prompt, prompt_selectstart, char);
+						strcpy_from(#control_system_prompt2, prompt_text, prompt_selectend);
+						strcat(#control_system_prompt, #control_system_prompt2);
+						strcpy(prompt_text, #control_system_prompt);
+						
+						prompt_selectstart += 1;
+						prompt_selectend = prompt_selectstart;
+					) : char == 8 || char == 6579564 ? (
+						prompt_selectstart == prompt_selectend ? (
+							char == 8 ? (
+								prompt_selectstart = max(prompt_selectstart - 1, 0);
+							) : (
+								prompt_selectend = min(strlen(prompt_text), prompt_selectend + 1);
+							);								
+						);
+						strcpy_substr(#control_system_prompt, prompt_text, 0, prompt_selectstart);
+						strcpy_from(#control_system_prompt2, prompt_text, prompt_selectend);
+						strcat(#control_system_prompt, #control_system_prompt2);
+						strcpy(prompt_text, #control_system_prompt);
+
+						prompt_selectend = prompt_selectstart;
+					) : char == 1919379572 ? (
+						prompt_selectstart == prompt_selectend ? (
+							prompt_selectstart = min(prompt_selectstart + 1, strlen(prompt_text));
+							prompt_selectend = prompt_selectstart;
+						) : (
+							prompt_selectstart = prompt_selectend;
+						);
+					) : char == 1818584692 ? (
+						prompt_selectstart == prompt_selectend ? (
+							prompt_selectstart = max(0, prompt_selectstart - 1);
+							prompt_selectend = prompt_selectstart;
+						) : (
+							prompt_selectend = prompt_selectstart;
+						);
+					) : char == 1752132965 ? (
+						prompt_selectstart = prompt_selectend = 0;
+					) : char == 6647396 ? (
+						prompt_selectstart = prompt_selectend = strlen(prompt_text);
+					);
+				);
+			);
+		ui_pop();
+
+		ui_screen_set(2, prompt_init);
+		ui_screen_set(3, prompt_selectstart);
+		ui_screen_set(4, prompt_selectend);
+		ui_screen_set(5, prompt_select1);
+		ui_screen_set(6, prompt_select2);
+	) : ui_system();
 );

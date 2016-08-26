@@ -227,6 +227,18 @@ This sets the default padding for each direction.  If you supply a negative numb
 
 These do not add or remove anything to the stack.  Instead, they modify the current drawing layer (and any later layers that inherit from it).
 
+### `ui_color(r, g, b)`
+
+Sets the current colour, full opacity.  RGB values are in the 0-255 range.
+
+### `ui_colora(r, g, b, a)`
+
+Sets the current colour, variable opacity.  RGB values are in the 0-255 range, but opacity is 0-1.
+
+### `ui_color_refresh()`
+
+Ensures that the current raw colour settings (`gfx_*` variables) match the current colour.  You only need this if you are drawing things yourself, and you do not need to call this if you have just called `ui_color()`.
+
 ### `ui_fontsize(pixels)`, `ui_fontbold(isBold)`, `ui_fontitalic(isItalic)` and `ui_fontface(name)`
 
 Changes properties of the font.  These changes have immediate effect.
@@ -235,7 +247,11 @@ The UI library always uses font index 16, so it is recommended that you avoid th
 
 ### `ui_font(name, size, isBold, isItalic)`
 
-Composite function for the above operations.  If `0` is supplied to either `name` or `size`, it re-uses the current font name/size.
+Composite function for the above operations.  If `-1` is supplied to either `name` or `size`, it re-uses the current font name/size.
+
+### `ui_font_refresh()`
+
+This ensures that the current raw font settings (`gfx_setfont()`) match the font values.  You only need this if you are drawing things yourself (e.g. using `gfx_drawstr()`), and you do not need to call this if you've just called `ui_font()`.  This also calls `ui_color_refresh()`.
 
 ### `ui_align(halign, valign)`
 
@@ -279,7 +295,11 @@ Mouse position as proportion of current viewport.  If the mouse is outside the c
 
 ### `ui_mouse_down()`
 
-Returns whether the mouse was just clicked inside the current viewport.
+Returns whether the mouse was just pressed inside the current viewport.
+
+### `ui_mouse_down_outside()`
+
+Returns whether the mouse was just pressed outside the current viewport.
 
 ### `ui_mouse_up()`
 
