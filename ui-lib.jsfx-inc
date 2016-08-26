@@ -1,4 +1,6 @@
 @init
+uix_debug = 0;
+
 uix_hassetup = 0;
 uix_screenstack = 0;
 uix_screenstack_step = 10 + UI_SCREEN#; // header + 10 vars
@@ -13,6 +15,7 @@ uix_drawconfig_currentindex = -1;
 
 uix_mousecap_prev = 0;
 uix_mouseblocked = 0;
+uix_doubleclicktime = 0.2;
 uix_click1 = uix_click2 = uix_click64 = 0;
 uix_unclick1 = uix_unclick2 = uix_unclick64 = 0;
 uix_click1_x = uix_click1_y = uix_click1_t = 0; // Left
@@ -69,8 +72,12 @@ function uix_setgfxfont() (
 );
 function uix_click_block() (
 	uix_mouseblocked = 1;
+	uix_click1count = 0;
 	uix_click1 = uix_click2 = uix_click64 = 0;
 	uix_unclick1 = uix_unclick2 = uix_unclick64 = 0;
+	uix_click1_x = uix_click1_y = uix_click1_t = 0; // Left
+	uix_click2_x = uix_click2_y = uix_click2_t = 0; // Right
+	uix_click64_x = uix_click64_y = uix_click3_t = 0; // Middle
 );
 
 function ui_error(string) (
@@ -144,7 +151,7 @@ function ui_setup(stackstart) local(uix_screenstack_end, uix_drawconfig_end) (
 	uix_drawconfig_end;
 );
 
-function ui_start(defaultScreen) local(i, click) (
+function ui_start(defaultScreen) local(i, click, clickdelta) (
 	uix_hassetup ? (
 		!ui_screen() ? (
 			uix_screenstack_currentlayer = 0;
@@ -187,10 +194,19 @@ function ui_start(defaultScreen) local(i, click) (
 		
 		uix_unclick1 = (!(mouse_cap&1) && uix_mousecap_prev&1);
 		uix_click1 = (mouse_cap&1 && !(uix_mousecap_prev&1)) ? (
-			uix_click1 = 1;
+			clickdelta = time_precise() - uix_click1_t;
 			uix_click1_x = mouse_x;
 			uix_click1_y = mouse_y;
+			uix_click1 = 1;
 			uix_click1_t = time_precise() - 0.001;
+
+			uix_click1 = 1;
+			clickdelta < uix_doubleclicktime ? (
+				uix_click1count += 1;
+			) : (
+				uix_click1count = 1;
+			);
+			
 		);
 		uix_unclick2 = (!(mouse_cap&2) && uix_mousecap_prev&2);
 		uix_click2 = (mouse_cap&2 && !(uix_mousecap_prev&2)) ? (
@@ -207,7 +223,7 @@ function ui_start(defaultScreen) local(i, click) (
 			uix_click64_t = time_precise() - 0.001;
 		);
 		uix_mousecap_prev = mouse_cap;
-
+		
 		uix_mouseblocked ? uix_click_block(); // Must be first, so unclick events get removed too
 		!(mouse_cap&1) && !(mouse_cap&2) && !(mouse_cap&64) ? uix_mouseblocked = 0;
 	) : (
@@ -269,7 +285,7 @@ function ui_right() (
 
 /////// Drawing operations ///////
 
-function ui_color_set() (
+function ui_color_refresh() (
 	uix_setgfxcolor();
 );
 
@@ -338,8 +354,8 @@ function ui_font(face, size, isBold, isItalic) (
 	uix_setgfxfont();
 );
 
-function ui_fill(r, g, b) (
-	uix_setgfxcolorrgba(r, g, b, 1);
+function ui_fill() (
+	uix_setgfxcolor();
 	gfx_rect(ui_left(), ui_top(), ui_width(), ui_height());
 );
 
@@ -403,9 +419,8 @@ function ui_text(text) local (text_h, text_w, boxwidth, boxheight, valign, halig
 );
 
 function ui_textnumber(number, format) local(text) (
-	text = #uix_textnumber;
-	sprintf(text, format ? format : "%f", number);
-	ui_text(text);
+	sprintf(#uix_textnumber, format ? format : "%f", number);
+	ui_text(#uix_textnumber);
 );
 
 function uix_fitline(text, start, text_end, width) local(i, result, line, line_end, char, hadspace, overflowed, text_w, text_h) (
@@ -527,12 +542,21 @@ function ui_push() local(i, oldlayer) (
 			i < uix_drawconfig_step;
 		);
 		// Some things shouldn't just be copied
-		uix_drawconfig_current[uix_DRAWCONFIG#SPLIT_N] = 0;
+		uix_drawconfig_current[uix_DRAWCONFIG#SPLIT_DIRECTION] = -1;
 		1;
 	);
 	0;
 );
 function ui_pop() local(prev) (
+	uix_debug ? (
+		ui_color(
+			128 + 255*cos((uix_drawconfig_currentindex + 0 + time())*$pi/3),
+			128 + 255*cos((uix_drawconfig_currentindex + 2 + time())*$pi/3),
+			128 + 255*cos((uix_drawconfig_currentindex + 4 + time())*$pi/3)
+		);
+		ui_border();
+	);
+
 	prev = uix_drawconfig_current;
 	uix_drawconfig_currentindex > 0 ? (
 		uix_drawconfig_currentindex -= 1;
@@ -554,6 +578,8 @@ function ui_split_top(height) local(oldTop) (
 	uix_drawconfig_current[uix_DRAWCONFIG#TOP] += height;
 	uix_drawconfig_current[uix_DRAWCONFIG#HEIGHT] -= height;
 	ui_push();
+	uix_drawconfig_current[uix_DRAWCONFIG#SPLIT_DIRECTION] = UI_SPLIT_DIRECTION#TOP;
+	uix_drawconfig_current[uix_DRAWCONFIG#SPLIT_HEIGHT] = height;
 	uix_drawconfig_current[uix_DRAWCONFIG#TOP] = oldTop;
 	uix_drawconfig_current[uix_DRAWCONFIG#HEIGHT] = height;
 	height;
@@ -570,6 +596,8 @@ function ui_split_bottom(height) local(oldBottom) (
 	oldBottom = ui_bottom();
 	uix_drawconfig_current[uix_DRAWCONFIG#HEIGHT] -= height;
 	ui_push();
+	uix_drawconfig_current[uix_DRAWCONFIG#SPLIT_DIRECTION] = UI_SPLIT_DIRECTION#BOTTOM;
+	uix_drawconfig_current[uix_DRAWCONFIG#SPLIT_HEIGHT] = height;
 	uix_drawconfig_current[uix_DRAWCONFIG#TOP] = oldBottom - height;
 	uix_drawconfig_current[uix_DRAWCONFIG#HEIGHT] = height;
 	height;
@@ -587,6 +615,8 @@ function ui_split_left(width) local(oldLeft) (
 	uix_drawconfig_current[uix_DRAWCONFIG#LEFT] += width;
 	uix_drawconfig_current[uix_DRAWCONFIG#WIDTH] -= width;
 	ui_push();
+	uix_drawconfig_current[uix_DRAWCONFIG#SPLIT_DIRECTION] = UI_SPLIT_DIRECTION#LEFT;
+	uix_drawconfig_current[uix_DRAWCONFIG#SPLIT_WIDTH] = width;
 	uix_drawconfig_current[uix_DRAWCONFIG#LEFT] = oldLeft;
 	uix_drawconfig_current[uix_DRAWCONFIG#WIDTH] = width;
 	width;
@@ -602,6 +632,8 @@ function ui_split_right(width) local(oldRight) (
 	oldRight = ui_right();
 	uix_drawconfig_current[uix_DRAWCONFIG#WIDTH] -= width;
 	ui_push();
+	uix_drawconfig_current[uix_DRAWCONFIG#SPLIT_DIRECTION] = UI_SPLIT_DIRECTION#RIGHT;
+	uix_drawconfig_current[uix_DRAWCONFIG#SPLIT_WIDTH] = width;
 	uix_drawconfig_current[uix_DRAWCONFIG#LEFT] = oldRight - width;
 	uix_drawconfig_current[uix_DRAWCONFIG#WIDTH] = width;
 	width;
@@ -613,27 +645,23 @@ function ui_split_righttext(text) (
 	ui_split_right(ui_text_width(text) + 2*uix_drawconfig_current[uix_DRAWCONFIG#HPADDING]);
 );
 
-function ui_split_next() local(n, ratio) (
+function ui_split_next() local(direction, width, height) (
+	direction = uix_drawconfig_current[uix_DRAWCONFIG#SPLIT_DIRECTION];
+	width = uix_drawconfig_current[uix_DRAWCONFIG#SPLIT_WIDTH];
+	height = uix_drawconfig_current[uix_DRAWCONFIG#SPLIT_HEIGHT];
 	ui_pop();
-	n = uix_drawconfig_current[uix_DRAWCONFIG#SPLIT_N];
-	n > 0 ? (
-		ratio = 1/n;
-		uix_drawconfig_current[uix_DRAWCONFIG#SPLIT_N] = n - 1;
-		uix_drawconfig_current[uix_DRAWCONFIG#SPLIT_N_DIRECTION] ? (
-			ui_split_topratio(ratio);
-		) : (
-			ui_split_leftratio(ratio);
-		);
+	direction == UI_SPLIT_DIRECTION#LEFT ? (
+		ui_split_left(width);
+	) : direction == UI_SPLIT_DIRECTION#TOP ? (
+		ui_split_top(height);
+	) : direction == UI_SPLIT_DIRECTION#RIGHT ? (
+		ui_split_right(width);
+	) : direction == UI_SPLIT_DIRECTION#BOTTOM ? (
+		ui_split_bottom(height);
 	) : (
-		ui_error("Called ui_split_next() too many times");
+		ui_error("Called ui_split_next() without ui_split_*()");
 		ui_push();
 	)
-);
-function ui_split_n(n, direction) (
-	uix_drawconfig_current[uix_DRAWCONFIG#SPLIT_N] = n;
-	uix_drawconfig_current[uix_DRAWCONFIG#SPLIT_N_DIRECTION] = direction;
-	ui_push();
-	ui_split_next();
 );
 
 function ui_push_height(height) (
@@ -689,15 +717,6 @@ function ui_push_belowratio(ratio) (
 );
 function ui_push_belowtext(text) local(text_height)  (
 	text_height = max(ui_texth(), ui_text_height(text));
-
-	debug_texth1 ? (
-		debug_texth2 = text_height;
-		debug_texth2gfx = text_height;
-	) : (
-		debug_texth1 = text_height;
-		debug_texth1gfx = text_height;
-	);
-
 	ui_push_below(text_height + 2*uix_drawconfig_current[uix_DRAWCONFIG#VPADDING]);
 );
 function ui_push_leftof(width) local(newwidth) (
@@ -828,6 +847,10 @@ function ui_press() (
 	ui_hover() ? ui_drag() : 0;
 );
 
+function ui_clickcount() (
+	uix_click1count;
+);
+
 function ui_click() (
 	ui_mouse_up() && uix_click1wasinside() && ui_hover() ? (
 		time_precise() - uix_click1_t;
@@ -836,15 +859,9 @@ function ui_click() (
 
 /////////////// LEVEL 2 ///////////////
 
-uix_control_red = 64;
-uix_control_green = 102;
-uix_control_blue = 140;
-uix_control_disabled_red = uix_control_disabled_green = uix_control_disabled_blue = 180;
-function uix_control_shade() (
-	shade = ui_press() ? 0.5 : ui_hover() ? 0.75 : ui_drag() ? 0.75 : 1;
-);
+uix_control_labelratio = 0.2;
 
-function control_gloss(strength) local(height, topalpha, bottomalpha) (
+function control_finish_enabled(strength) local(height, topalpha, bottomalpha) (
 	// White fade
 	height = ui_height()*0.5;
 	topalpha = strength*0.3;
@@ -875,9 +892,17 @@ function control_gloss(strength) local(height, topalpha, bottomalpha) (
 		0, 0, 0, 0,
 		0, 0, 0, (bottomalpha - topalpha)/height
 	);
+
+	ui_colora(0, 0, 0, 0.1);
+	ui_border();
 );
 
-function control_inset(strength) local(height, topalpha, bottomalpha) (
+function control_finish_disabled(strength) (
+	ui_colora(0, 0, 0, 0.1);
+	ui_border();
+);
+
+function control_finish_inset(strength) local(height, topalpha, bottomalpha) (
 	// Black fade
 	height = min(5, ui_height()/2);
 	topalpha = strength*0.1;
@@ -898,38 +923,51 @@ function control_inset(strength) local(height, topalpha, bottomalpha) (
 		0, 0, 0, 0,
 		0, 0, 0, (bottomalpha - topalpha)/height
 	);
+	ui_colora(0, 0, 0, 0.1);
+	ui_border();
 );
 
-function control_softborder() (
-	ui_push();
-		ui_colora(0, 0, 0, 0.1);
-		ui_border();
-	ui_pop();
+function control_color_fill_disabled() (
+	ui_color(180, 180, 180);
 );
 
-function control_hardborder() (
+function control_color_fill_enabled() local(shade, red, green, blue) (
+	shade = ui_press() ? 0.5 : ui_hover() ? 0.75 : ui_drag() ? 0.75 : 1;
+	ui_color(64*shade, 102*shade, 140*shade);
+);
+
+function control_color_fill_inset() (
+	ui_color(255, 255, 255);
+);
+
+function control_color_text_enabled() (
+	ui_color(255, 255, 255);
+);
+
+function control_color_text_disabled() (
+	ui_color(255, 255, 255);
+);
+
+function control_color_text_inset() (
+	ui_color(0, 0, 0);
+);
+
+function control_border() (
 	ui_push();
 		ui_colora(0, 0, 0, 0.3);
 		ui_border();
 	ui_pop();
 );
 
-function control_indicator_button(text, status) local(click, shade, red, green, blue) (
+function control_indicator_button(text, status) local(click) (
 	ui_push();
-		shade = status ? uix_control_shade() : 1;
-		
-		red = status ? uix_control_red : uix_control_disabled_red;
-		green = status ? uix_control_green : uix_control_disabled_green;
-		blue = status ? uix_control_blue : uix_control_disabled_blue;
-		
-		ui_fill(red*shade, green*shade, blue*shade);
+		status ? control_color_fill_enabled() : control_color_fill_disabled();
+		ui_fill();
 
-		ui_color(255, 255, 255);
+		status ? control_color_text_enabled() : control_color_text_disabled();
 		ui_text(text);
-		status ? control_gloss(1);
+		status ? control_finish_enabled(1) : control_finish_disabled(1);
 		
-		control_softborder();
-
 		click = ui_click();
 	ui_pop();
 	click;
@@ -940,8 +978,6 @@ function control_button(text) (
 );
 
 function control_arrow(direction) local(size, tmp, centerx, centery, point1x, point1y, point2x, point2y, point3x, point3y) ( // left, up, right, down
-	debug.arrow_alpha = uix_drawconfig_current[uix_DRAWCONFIG#ALPHA];
-	debug.arrow_red = uix_drawconfig_current[uix_DRAWCONFIG#RED];
 	size = min(ui_height(), ui_width());
 	direction == 0 ? (
 		centerx = size/2;
@@ -983,48 +1019,60 @@ function control_arrow(direction) local(size, tmp, centerx, centery, point1x, po
 		point3y = tmp;
 	);
 
-	ui_color_set();
+	ui_color_refresh();
 	gfx_triangle(centerx + point1x, centery + point1y, centerx + point2x, centery + point2y, centerx + point3x, centery + point3y);
 );
 
 function control_selector(value, text, next_value, prev_value) local(buttonwidth) (
 	ui_push();
-		ui_fill(255, 255, 255);
+		ui_color(255, 255, 255);
+		ui_fill();
 		buttonwidth = min(ui_height()/2, ui_width()/2);
 		
 		ui_halign() <= 0.5 ? ui_split_left(buttonwidth) : ui_split_right(buttonwidth);
 			ui_colora(255, 255, 255, 0.8);
 			ui_split_topratio(0.5);
-				control_button("") ? value = next_value;
+				control_color_fill_enabled();
+				ui_fill();
+				control_color_text_enabled();
 				control_arrow(1);
+				control_finish_enabled(1);
+				ui_click() ? value = next_value;
+			ui_split_next();
+				control_color_fill_enabled();
+				ui_fill();
+				control_color_text_enabled();
+				control_arrow(3);
+				control_finish_enabled(1);
+				ui_click() ? value = prev_value;
 			ui_pop();
-			control_button("") ? value = prev_value;
-			control_arrow(3);
 		ui_pop();
-		ui_color(0, 0, 0);
+		
+		control_color_text_inset();
 		ui_push();
 			ui_padleft();
 			ui_padright();
 			ui_text(text);
 		ui_pop();
 
-		control_inset(1);
-		control_softborder();
+		control_finish_inset(1);
 	ui_pop();
-	control_hardborder();
+	control_border();
 	value;
 );
 
 function control_navbar(title, next_title, next_screen) local(click) (
 	ui_split_toptext(title);
-		ui_fill(255, 255, 255);
-		control_gloss(0.5);
-		control_softborder();
+		ui_color(255, 255, 255);
+		ui_fill();
 
 		ui_color(0, 0, 0);
 		title ? (
 			ui_text(title);
 		);
+		control_finish_enabled(0.5);
+		control_border();
+
 		ui_screen_level() > 0 ? (
 			ui_split_lefttext("< back");
 				control_button("< back") ? (
@@ -1044,34 +1092,108 @@ function control_navbar(title, next_title, next_screen) local(click) (
 	ui_click();
 );
 
-function control_hslider(value, range_low, range_high, curve) local(ratio, shade) (
-	curve > 0 ? ( // Power
-		ratio = (value - range_low)/(range_high - range_low);
-		ratio = pow(ratio, 1/curve);
-	) : (
-		range_low > 0 && range_high > 0 && value > 0 ? ( // Logarithmic
-			ratio = log(value/range_low)/log(range_high/range_low);
-		) : ui_error("Cannot have negative values or range for logarithmic slider");
+function control_hslider(value, range_low, range_high, curve_bias) local(valueratio, screenratio) (
+	valueratio = max(0, min(1, (value - range_low)/(range_high - range_low)));
+	screenratio = curve_bias ? (
+		log(valueratio*(exp(curve_bias) - 1) + 1)/curve_bias
+	) : valueratio;
+	ui_drag() ? (
+		screenratio = max(0, min(1, ui_mouse_xratio()));
+		valueratio = curve_bias ? (
+			(exp(screenratio*curve_bias) - 1)/(exp(curve_bias) - 1)
+		) : screenratio;
+		value = range_low + (range_high - range_low)*valueratio;
 	);
+
 	ui_push();
-		ui_fill(255, 255, 255);
-		
-		shade = uix_control_shade();
-		ui_color(uix_control_red*shade, uix_control_green*shade, uix_control_blue*shade);
-		gfx_rect(ui_left(), ui_top(), floor((ui_width() - 1)*ratio + 1.5), ui_height());
-		
-		ui_drag() ? (
-			ratio = max(0, min(1, ui_mouse_xratio()));
-			curve > 0 ? (
-				value = range_low + (range_high - range_low)*pow(ratio, curve);
-			) : (
-				range_low > 0 && range_high > 0 ? (
-					value = exp(log(range_low) + log(range_high/range_low)*ratio);
-				)
-			);
-		);
-		control_gloss(1);
-		control_hardborder();
+		control_color_fill_inset();
+		ui_fill();
+		control_finish_inset(1);
+
+		ui_push();
+			control_color_fill_enabled();
+			barwidth = floor((ui_width() - 1)*screenratio + 1.5);
+			ui_split_left(barwidth);
+				ui_fill();
+				control_finish_enabled(1);
+			ui_pop();
+		ui_pop();
+
+		control_border();
 	ui_pop();
 	value;
+);
+
+/*
+function control_text_left(text) (
+	ui_split_lefttext(text);
+		ui_text(text);
+	ui_pop();
+);
+function control_label_left(text) local(width) (
+	ui_split_leftratio(uix_control_labelratio);
+		ui_padright();
+		ui_align(1, -1);
+		ui_text(text);
+	ui_pop();
+);
+function control_label_leftnumber(value, format) (
+	sprintf(#control_label, format, value);
+	control_label_left(#control_label);
+);
+
+function control_text_right(text) (
+	ui_split_righttext(text);
+		ui_text(text);
+	ui_pop();
+);
+function control_label_right(text) local(width) (
+	ui_split_rightratio(uix_control_labelratio);
+		ui_padleft();
+		ui_align(0, -1);
+		ui_text(text);
+	ui_pop();
+);
+function control_label_rightnumber(value, format) (
+	sprintf(#control_label, format, value);
+	control_label_right(#control_label);
+);
+
+function control_text_top(text) (
+	ui_split_toptext(text);
+		ui_text(text);
+	ui_pop();
+);
+function control_label_top(text) (
+	ui_split_toptext(-1);
+		ui_padbottom();
+		ui_align(-1, 1);
+		ui_text(text);
+	ui_pop();
+);
+function control_label_topnumber(value, format) (
+	sprintf(#control_label, format, value);
+	control_label_top(#control_label);
+);
+
+function control_text_bottom(text) (
+	ui_split_bottomtext(text);
+		ui_text(text);
+	ui_pop();
+);
+function control_label_bottom(text) (
+	ui_split_bottomtext(-1);
+		ui_padtop();
+		ui_align(-1, 0);
+		ui_text(text);
+	ui_pop();
+);
+function control_label_bottomnumber(value, format) (
+	sprintf(#control_label, format, value);
+	control_label_bottom(#control_label);
+);
+*/
+
+function control_system() (
+	ui_system();
 );

@@ -161,12 +161,12 @@ These are the same as `ui_split_top()` etc., except it measures the supplied tex
 
 The return value of this function is the calculated height/width.
 
-### `ui_split_n(sections, direction)` and `ui_split_next()`
+### `ui_split_next()`
 
-These two functions are used to divide up the viewport into equal sections.  `ui_split_n()` creates the first split, and `ui_split_next()` pops the old split off and adds the next one.  Direction `0` is horizontal (meaning the sections are thin), and direction `1` is vertical (meaning the sections are flat and wide).
+Pop a layer off the stack, and perform the same split again.  This can be used with `ui_split_*ratio()` to divide the space up evenly:
 
 ```
-ui_split_n(4, 1); // Four sections stacked vertically
+ui_split_topratio(1/3);
 	ui_text('Line 1');
 ui_split_next();
 	ui_text('Line 2');
@@ -175,7 +175,7 @@ ui_split_next();
 ui_pop();
 ```
 
-It is fine to call `ui_split_n()` too few times (it just leaves a blank space) but calling it too many times results in an error.
+Calling `ui_split_n()` when the current layer was not created by `ui_split_*()` results in an error.
 
 ### `ui_push_height(height)` and `ui_push_width(width)`
 
@@ -263,11 +263,9 @@ Returns height of the rendered text.
 
 Height of wrapped text using the current font settings.
 
-### `ui_fill(r, b, g)`
+### `ui_fill()`
 
-Fills the current viewport with a solid colour.
-
-This automatically sets the text colour to a contrasting one (black or white).
+Fills the current viewport with the current colour.
 
 ## Input
 
@@ -309,6 +307,20 @@ Whether this element was clicked.  It returns the duration of the click.
 
 Note: this triggers on mouse-up (which also means that drag and press will return false at this point).  If you want mouse-down, use `ui_mousedown()`.
 
+### `ui_clickcount()`
+
+Returns whether the latest click was a single-click, double-click, etc.
+
+```
+ui_click() ? (
+	ui_clickcount == 1 ? (
+		single_click_action();
+	) : ui_clickcount == 2 ? (
+		double_click_action();
+	);
+);
+```
+
 ### `ui_drag()`
 
 Whether this element was clicked before and the mouse is still down.  It returns the time since the mouse was originally clicked.
@@ -316,6 +328,10 @@ Whether this element was clicked before and the mouse is still down.  It returns
 ## Complex controls
 
 These are controls implemented using the above functions.  They are opinionated - they have fixed colours and layouts.  However, they can be used to create a powerful UI more easily.
+
+There are also some pre-defined screens which are made available if you use `control_system()` instead of `ui_system()`:
+
+*	`control.prompt` - first argument is a 
 
 ### `control_navbar(title, next_screen, next_title)`
 
@@ -336,15 +352,88 @@ control_button("Go!") ? (
 Displays a button that can be disabled (greyed-out).
 
 ```
-control_button("Go!", ready_to_go) ? (
-	ready_to_go ? do_something();
+control_button("Go!", is_enabled) ? (
+	is_enabled ? do_something();
 );
 ```
 
 Note that it will still return positive when clicked, even if the button is disabled, so you should check again before performing an action.
 
-### `control_gloss(strength)`
+### `control_selector(value, text, up_value, down_value)`
 
-Adds highlights/shadows to the current viewport to give a nice 3D effect.  This is used by the all the `control_` controls, so use this if you want to match them with your custom elements.
+Displays a control with up/down buttons and a text area.  Returns the new value.
 
-The normal strength is `1`, but some non-interactive elements use `0.5` (such as the nav-bar).
+```
+// Displays a control that changes between foo/bar/baz
+display_text = value == 1 ? "foo" : value == 2 ? "bar" : "baz";
+value = control_selector(value, display_text, (value + 1)%3, (value + 2)%3);
+```
+
+### `control_hslider(value, range_low, range_high, curve_bias)`
+
+Displays a horizontal slider.  Returns the new value.
+
+The value of `curve_bias` determines how the displayed proportion of the slider corresponds to the actual values. `0` is linear, and you can get a logarithmic scale using `log(high/low)`:
+
+```
+// Linear slider between 0 and 1
+value = control_hslider(value, 0, 1, 0);
+
+// Low-biased slider (better accuracy near 0)
+value = control_hslider(value, 0, 1, 3);
+
+// High-biased slider (better accuracy near 1)
+value = control_hslider(value, 0, 1, -3);
+
+// Logarithmic slider
+value = control_hslider(value, low, high, log(high/low));
+```
+
+### `control_system()`
+
+This is a replacement for
+
+### Drawing functions
+
+These functions are used to make the above controls, so you can use them if you wish to match this look with custom elements.  There are three states:
+
+*	`enabled` - used by buttons and the active part of sliders
+*	`disabled` - used by disabled buttons
+*	`inset` - used for meters/displays, and the inactive part of sliders
+
+There are three functions for each of these states:
+
+*	`control_color_fill_{state}()` - sets the colour to the appropriate background colour, ready to call `ui_fill()`
+*	`control_color_text_{state}()` - sets the colour to the appropriate text colour, ready to call `ui_text()`
+*	`control_finish_{state}(strength)` - adds gloss/shadows to the element. Strength should be `1` unless you want it deliberately flatter.
+
+Although these functions form a nice set when used together (in the order fill, text, finish), they can be used for any - for example, the
+
+If an element comprises multiple states (e.g. sliders which have an `enabled` element on top of an `inset` groove), it is recommended to draw `inset` first, and then either `enabled` or `disabled` on top.
+
+```
+// Custom element, with an "enabled" section sitting inside an "inset" groove
+ui_push();
+	control_color_fill_inset();
+	ui_fill();
+	control_finish_inset();
+	
+	control_color_fill_enabled();
+	ui_push_widthratio(0.5); // Fill half the width
+		ui_fill();
+		control_finish_enabled();
+	ui_pop();
+ui_pop();
+```
+
+NOTE: the `control_color_*_*()` functions use the current mouse hover/click/drag state to decide on the colour.  Since the regions for checking that state depend on the viewport, you probably want to assign these colours *before* changing the viewport - see `control_color_fill_enabled()` in the above example.
+
+#### `control_border()`
+
+Draws a border around the element.  Used for the outside of interactive controls, but not for internal boundaries.
+
+#### `control_arrow(direction)`
+
+Draws an arrow aligned towards one edge of the element (it is *not* centred).
+
+Values for `direction` are `0` (left), `1` (top), `2` (right) and `3` (bottom).

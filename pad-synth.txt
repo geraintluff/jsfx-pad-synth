@@ -17,22 +17,6 @@ invsrate = 1/srate;
 fftblock = 0;
 fftblock_end = 65536;
 
-string_slot_counter = 1;
-function string_slot(current) local(result) (
-	(current > 1 && current < string_slot_counter) ? (
-		current;
-	) : (
-		string_slot_counter < 1024 ? (
-			result = string_slot_counter;
-			string_slot_counter += 1;
-			result;
-		) : (
-			ui_error("Ran out of string slots!");
-			#string_slot_singleton; // All remaining strings the same
-		);
-	);
-);
-
 uiblock_end = ui_setup(fftblock_end);
 
 // Description of all effects in the system
@@ -51,6 +35,10 @@ fx_list_headerlength = FX##;
 fx_list_statelength = 16;
 fx_list_step = fx_list_headerlength + fx_list_statelength;
 fx_list_end = fx_list_start + fx_list_step*fx_list_maxcount;
+
+// First N string slots are reserved for effect names
+string_fx_names_start = 1; // So we don't mistake 0 for a valid index
+string_fx_names_end = fx_list_maxcount;
 
 notes_start = fx_list_end;
 note_headerlength = NOTE#;
@@ -120,10 +108,34 @@ function effect_init_lfo(effect) local(mods, state) (
 effectspec[FX_HEADER#CONFIG_UI_FUNCTION] = {config_ui}effect_ui_lfo;
 function effect_ui_lfo(effect) (
 	state = effect + fx_list_headerlength;
-	ui_split_n(2, 1);
-		state[LFO_STATE#AMP] = control_hslider(state[LFO_STATE#AMP], 0, 1, 1);
+	ui_split_topratio(1/2);
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_align(1, -1);
+				ui_padright();
+				ui_text("depth");
+			ui_pop();
+			ui_split_rightratio(0.2);
+				ui_padleft();
+				ui_align(0, -1);
+				ui_textnumber(floor(state[LFO_STATE#AMP]*100 + 0.5), "%i%%");
+			ui_pop();
+			state[LFO_STATE#AMP] = control_hslider(state[LFO_STATE#AMP], 0, 1, 0);
+		ui_pop();
 	ui_split_next();
-		state[LFO_STATE#FREQ] = control_hslider(state[LFO_STATE#FREQ], 0, 100, 3);
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_padright();
+				ui_align(1, -1);
+				ui_text("frequency");
+			ui_pop();
+			ui_split_rightratio(0.2);
+				ui_padleft();
+				ui_align(0, -1);
+				ui_textnumber(state[LFO_STATE#FREQ], "%.2fHz");
+			ui_pop();
+			state[LFO_STATE#FREQ] = control_hslider(state[LFO_STATE#FREQ], 0, 100, 3);
+		ui_pop();
 	ui_pop();
 );
 function effect_swap_lfo(effect, fxIndex1, fxIndex2) (
@@ -172,20 +184,33 @@ function effect_note_exec_lfo(effect, note, notestate) local(angFreq, value, tar
 function {effect_init}(effect_slot);
 function {config_ui}(effect);
 
-function append_effect(index) local(spec, effect) (
-	debug.append_effect += 1;
+function append_effect(index) local(spec, effect, effect_name) (
 	fx_list_count < fx_list_maxcount ? (
-		debug.append_effect_success += 1;
 		// TODO: check the index is valid, otherwise insert placeholder (negative index)
 		effect = fx_list_start + fx_list_step*fx_list_count;
-		fx_list_count += 1;
+		effect_name = string_fx_names_start + fx_list_count;
 		spec = fx_spec_start + fx_spec_step*index;
 		{effect_init:spec[FX_HEADER#FUNC_INIT]}(effect);
-		effect;
-	) : 0; // This should be checked first, otherwise you'll overwrite the fft area
+
+		// Make sure effect is using the correct mutable string slot
+		effect[FX#NAME] != effect_name ? (
+			debug.copied_to.effect_name = effect_name;
+			strcpy(effect_name, effect[FX#NAME]);
+			debug.strlen = strlen(effect_name);
+			effect[FX#NAME] = effect_name;
+		);
+		
+		clear_all_notes();
+		fx_list_count += 1;
+		clear_all_notes();
+
+		fx_list_count - 1; // Index before increment
+	) : -1;
 );
 // TODO: make these use function references
 function effect_swap(effect, fxIndex1, fxIndex2) local(note) (
+	// TODO: perform the swap - and swap the name strings around, otherwise they'll get out of order!
+
 	effect[FX#SPEC_INDEX] == FX_SPECLIST_INDEX#LFO ? (
 		effect_swap_lfo(effect, fxIndex1, fxIndex2);
 	);
@@ -222,7 +247,7 @@ function reset_to_defaults() (
 	param_env_linear = 0;
 
 	fx_list_count = 0;
-	append_effect(FX_SPECLIST_INDEX#LFO);
+	//append_effect(FX_SPECLIST_INDEX#LFO);
 );
 !has_set_parameters ? reset_to_defaults();
 
@@ -440,7 +465,11 @@ while (
 			) : (
 				secondsFromAttack = secondsFromStart - attack;
 				secondsFromAttack < decay ? (
-					env *= 1 - (1 - sustain)*secondsFromAttack/decay;
+					env *= sustain + (1 - sustain)*(
+						param_env_linear
+							? 1 - secondsFromAttack/decay
+							: pow(1 - secondsFromAttack/decay, 3)
+					);
 				) : (
 					env *= sustain;
 				);
@@ -450,10 +479,11 @@ while (
 					env = 0;
 					note[NOTE#ACTIVE] = 0;
 				) : (
-					env *= 1 - secondsFromEnd/release;
+					env *= param_env_linear
+						? 1 - secondsFromEnd/release
+						: pow(1 - secondsFromEnd/release, 3);
 				);
 			);
-			!param_env_linear ? env = env*env*env;
 			note[NOTE#AMP] *= env;
 			
 			wavetable = wavetables_start + note[NOTE#WAVEINDEX]*wavetable_step;
@@ -537,23 +567,6 @@ function draw_waveform() local(wavetable, samples, value, x, y, gi, gis, box_lef
 	ui_border();
 );
 
-function named_hslider(name, value, range_low, range_high, curve, displayvalue, displayformat) (
-	ui_split_left(100);
-		ui_pad();
-		ui_align(1, 0.5);
-		ui_text(name);
-	ui_pop();
-	ui_split_right(100);
-		ui_pad();
-		ui_align(0, 0.5);
-		ui_textnumber(displayvalue, displayformat);
-	ui_pop();
-	ui_push_heighttext(-1);
-		value = control_hslider(value, range_low, range_high, curve);
-	ui_pop();
-	value;
-);
-
 ui_start("main"); // Default screen
 
 slider_value = slider_value ? slider_value : 0.5;
@@ -562,17 +575,14 @@ ui_screen() == "main" ? (
 	control_navbar("PadSynth", "About", "about");
 	ui_pad();
 	ui_split_toptext("");
-		ui_split_n(2, 0);
+		ui_split_leftratio(0.5);
 			control_button("Envelope (ADSR)") ? (
 				ui_screen_open("envelope");
 			);
 		ui_split_next();
 			display_first_effect = fx_list_start;
-			debug.display.effect = display_first_effect;
-			debug.display.effect_name = display_first_effect[FX#NAME];
-			control_button(display_first_effect[FX#NAME]) ? (
-				ui_screen_open("edit-effect");
-				ui_screen_set(0, display_first_effect);
+			control_button("Effects") ? (
+				ui_screen_open("list-effects");
 			);
 		ui_pop();
 	ui_pop();
@@ -588,9 +598,12 @@ ui_screen() == "main" ? (
 		ui_split_lefttext("Width (cents)");
 			ui_text("Width (cents)");
 		ui_pop();
-		ui_split_right(50);
+		ui_split_righttext("200");
+			ui_padleft();
+			ui_align(0, -1);
 			ui_textnumber(param_width_cents + 0.5, "%i");
 		ui_pop();
+
 		new_width_cents = control_hslider(param_width_cents, 5, 200, 3);
 		new_width_cents != param_width_cents ? can_recompute = 1;
 		param_width_cents = new_width_cents;
@@ -598,9 +611,10 @@ ui_screen() == "main" ? (
 	ui_padbottom();
 	
 	ui_push();
-		ui_fill(0, 0, 0);
+		ui_color(0, 0, 0);
+		ui_fill();
 		draw_waveform();
-		control_gloss(1);
+		control_finish_enabled(1);
 	ui_pop();
 ) : ui_screen() == "about" ? (
 	control_navbar("About", 0, 0);
@@ -625,21 +639,166 @@ ui_screen() == "main" ? (
 	ui_pop();
 ) : ui_screen() == "envelope" ? (
 	control_navbar("Envelope (ADSR)", 0, 0);
-	ui_split_n(5, 1);
-		param_attack = named_hslider("Attack", param_attack, 0.001, 1.5, 3, floor(param_attack*1000 + 0.5), "%ims");
+	ui_split_topratio(1/5);
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_padright();
+				ui_align(1, -1);
+				ui_text("Attack");
+			ui_pop();
+			ui_split_rightratio(0.2);
+				ui_padleft();
+				ui_align(0, -1);
+				ui_textnumber(floor(param_attack*1000 + 0.5), "%ims");
+			ui_pop();
+			param_attack = control_hslider(param_attack, 0.001, 1.5, 3);
+		ui_pop();
 	ui_split_next();
-		param_decay = named_hslider("Decay", param_decay, 0.001, 5, 3, floor(param_decay*1000 + 0.5), "%ims");
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_padright();
+				ui_align(1, -1);
+				ui_text("Decay");
+			ui_pop();
+			ui_split_rightratio(0.2);
+				ui_padleft();
+				ui_align(0, -1);
+				ui_textnumber(floor(param_decay*1000 + 0.5), "%ims");
+			ui_pop();
+			param_decay = control_hslider(param_decay, 0.001, 5, 3);
+		ui_pop();
 	ui_split_next();
-		param_sustain = named_hslider("Sustain", param_sustain, 0, 1, 1, floor(param_sustain*100 + 0.5), "%i%%");
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_padright();
+				ui_align(1, -1);
+				ui_text("Sustain");
+			ui_pop();
+			ui_split_rightratio(0.2);
+				ui_padleft();
+				ui_align(0, -1);
+				ui_textnumber(floor(param_sustain*100 + 0.5), "%i%%");
+			ui_pop();
+			param_sustain = control_hslider(param_sustain, 0, 1, 0);
+		ui_pop();
 	ui_split_next();
-		param_release = named_hslider("Release", param_release, 0.005, 5, 3, floor(param_release*1000 + 0.5), "%ims");
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_padright();
+				ui_align(1, -1);
+				ui_text("Release");
+			ui_pop();
+			ui_split_rightratio(0.2);
+				ui_padleft();
+				ui_align(0, -1);
+				ui_textnumber(floor(param_release*1000 + 0.5), "%ims");
+			ui_pop();
+			param_release = control_hslider(param_release, 0.005, 5, 3);
+		ui_pop();
 	ui_split_next();
-		ui_pad2(100, 0);
-		ui_push_heighttext("");
-			ui_align(0, -1);
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_padright();
+				ui_align(1, -1);
+				ui_text("Curve");
+			ui_pop();
+			ui_split_rightratio(0.2);
+			ui_pop();
+			
+			ui_align(0, -1); // Align left
 			param_env_linear = control_selector(param_env_linear, param_env_linear ? "Linear" : "Tapered", !param_env_linear, !param_env_linear);
 		ui_pop();
 	ui_pop();
+) : ui_screen() == "list-effects" ? (
+	g_effect_index = 0;
+	control_navbar("", 0, 0);
+	ui_split_bottomtext(-1);
+		control_indicator_button("add effect", fx_list_count < fx_list_maxcount) ? (
+			fx_list_count < fx_list_maxcount ? ui_screen_open("add-effect");
+		);
+	ui_pop();
+	
+	ui_split_topratio(1/fx_list_maxcount);
+	while (g_effect_index < fx_list_maxcount) (
+		g_effect_index < fx_list_count ? (
+			g_effect = fx_list_start + fx_list_step*g_effect_index;
+			g_effectspec = fx_spec_start += fx_spec_step*g_effect[FX#SPEC_INDEX];
+			ui_color(0, 0, 0);
+			ui_split_righttext("edit") ? (
+				control_button("edit") ? (
+					ui_screen_open("edit-effect");
+					ui_screen_set(0, g_effect);
+				);
+			);
+			ui_pop();
+			
+			// Double-click to edit name
+			ui_click() && ui_clickcount() == 2 ? (
+				ui_screen_open("control.prompt");
+				ui_screen_set(0, g_effect[FX#NAME]);
+				ui_screen_set(1, "Rename effect");
+			);
+			
+			// Drag to re-order
+			ui_drag() ? (
+				g_drageffect_index = g_effect_index;
+			) : (
+				g_drageffect_index == g_effect_index ? (
+					g_drageffect_index = -1;
+				);
+			);
+			// Drop to re-order
+			ui_hover() && g_drageffect_index >= 0 ? (
+				g_effect_index <= g_drageffect_index ? (
+					ui_mouse_yratio() < 0.5 ? (
+						g_drageffect_targetindex = g_effect_index;
+					) : (
+						g_drageffect_targetindex = g_effect_index + 1;
+					);
+				) : (
+					ui_mouse_yratio() < 0.5 ? (
+						g_drageffect_targetindex = g_effect_index - 1;
+					) : (
+						g_drageffect_targetindex = g_effect;
+					);
+				);
+				// TODO: test drops with mouse_up();
+			);
+			
+			debug.draw_name = g_effect[FX#NAME];
+			g_drageffect_index == g_effect_index ? (
+				ui_color(160, 160, 160);
+				ui_fill();
+				ui_color(255, 255, 255);
+				ui_text(g_effect[FX#NAME]);
+			) : (
+				(g_effect_index%2) ? (
+					ui_colora(255, 255, 255, 1);
+					ui_fill();
+				);
+				ui_color(0, 0, 0);
+				ui_text(g_effect[FX#NAME]);
+			);
+			ui_color(0, 0, 0);
+			ui_hover() && g_drageffect_index >= 0 ? (
+				ui_mouse_yratio() < 0.5 ? (
+					ui_border_top();
+				) : (
+					ui_border_bottom();
+				);
+			);
+
+			ui_colora(0, 0, 0, 0.1);
+			ui_border_bottom();
+		);
+
+		g_effect_index += 1;
+		ui_split_next();
+	);
+	ui_pop();
+) : ui_screen() == "add-effect" ? (
+	append_effect(FX_SPECLIST_INDEX#LFO);
+	ui_screen_close();
 ) : ui_screen() == "edit-effect" ? (
 	g_effect = ui_screen_get(0);
 	g_effect_spec = fx_spec_start + fx_spec_step*g_effect[FX#SPEC_INDEX];
@@ -647,7 +806,7 @@ ui_screen() == "main" ? (
 	control_navbar(g_effect[FX#NAME], 0, 0);
 	effect_ui = g_effect_spec[FX_HEADER#CONFIG_UI_FUNCTION];
 	{config_ui:effect_ui}(g_effect);
-) : ui_system();
+) : control_system();
 
 @serialize
 
@@ -668,7 +827,6 @@ function read_string_var(string) local(vars_read, char_count, char, string_lengt
 	strcpy(string, "");
 	string_length = 0;
 	file_var(0, char_count);
-	debug.read_string.char_count = char_count;
 	vars_read = 1 + char_count;
 	string_length < char_count ? while (
 		file_var(0, char);
@@ -678,7 +836,7 @@ function read_string_var(string) local(vars_read, char_count, char, string_lengt
 	);
 	vars_read;
 );
-function read_effect() local(read_length, effect, spec_index, var_id, i, var_length, value) (
+function read_effect() local(read_length, effect, effect_index, spec_index, var_id, i, var_length, value) (
 	fx_list_count < fx_list_maxcount ? (
 		file_var(0, read_length);
 		
@@ -686,21 +844,17 @@ function read_effect() local(read_length, effect, spec_index, var_id, i, var_len
 		read_length -= 1;
 		// TODO: check that the effect is a known type, otherwise put a placeholder in so the indices don't get screwed up (and remove placeholders at the end)
 		
-		effect = append_effect(spec_index);
+		effect_index = append_effect(spec_index);
+		effect = fx_list_start + fx_list_step*effect_index;
 		
 		read_length > 0 ? while(
 			file_var(0, var_id);
-			debug.read_effect.var_id = var_id;
 			read_length -= 1;
 			var_id == VAR_ID#effect_name(104) ? (
-				// Make sure it's pointing to a mutable string slot
-				effect[FX#NAME] = string_slot(effect[FX#NAME]);
-				debug.read_effect.effect = effect;
-				debug.effect_name_slot = effect[FX#NAME];
-				debug.effect_name_strlen1 = strlen(effect[FX#NAME]);
+				// Point it at the correct mutable string slot
+				effect[FX#NAME] = string_fx_names_start + effect_index;
 				// Read the variable into that slot
 				read_length -= read_string_var(effect[FX#NAME]);
-				debug.effect_name_strlen2 = strlen(effect[FX#NAME]);
 			) : var_id == VAR_ID#effect_state(105) && effect >= 0 ? (
 				file_var(0, var_length);
 				read_length -= var_length + 1;
@@ -792,7 +946,6 @@ function write_effects() local(i, effect, var_id, var_length) (
 		
 		file_var(0, var_id);
 		file_var(0, var_length);
-		debug.write_effects.var_length = var_length;
 		
 		file_var(0, effect[FX#SPEC_INDEX]);
 		write_string_var(VAR_ID#effect_name(104), effect[FX#NAME]);
@@ -805,8 +958,6 @@ function write_effects() local(i, effect, var_id, var_length) (
 
 // Actual logic
 file_avail(0) >= 0 ? (
-	debug_reset += 1;
-	debug.reset_file_avail = file_avail(0);
 	reset_to_defaults();
 	file_avail(0) ? (
 		fx_list_count = 0;
