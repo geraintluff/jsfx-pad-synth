@@ -291,7 +291,7 @@ Height of wrapped text using the current font settings.
 
 Fills the current viewport with the current colour.
 
-## Input
+## Mouse
 
 ### `ui_mouse_x()` and `ui_mouse_y()`
 
@@ -353,6 +353,28 @@ ui_click() ? (
 
 Whether this element was clicked before and the mouse is still down.  It returns the time since the mouse was originally clicked.
 
+Note: this does not start returning true immediately after mouse-down - it waits either a short amount of time, or until the mouse has moved a bit.  If you want an immediate response, you should check `ui_mouse_down()` or `ui_press()` as well.
+
+## Keyboard
+
+REAPER's native `gfx_getchar()` function pops a character off the queue every time it's called - this is awkward if more than one control might be interested in the key's value.
+
+When dealing with the keyboard, the concept of "focus" is relevant.  Controls should not assume they are focused (paying attention to keypress events) unless they have been clicked.  They should also listen for clicks outside themselves (using `ui_mouse_down_outside()`) and become unfocused.
+
+In a given frame, if no keys were consumed (using `ui_key_next()`), the first key is discarded so a different one can be tried next frame.
+
+### `ui_key()`
+
+Returns the latest key code.  If no keys more are queued up, it returns `0`.
+
+### `ui_key_next()`
+
+Consumes the current key, and returns the next one (or `0` if there are none).
+
+### `ui_key_printable()`
+
+Returns `ui_key()` if the value is a printable character (32-127), `0` otherwise.
+
 ## Complex controls
 
 These are controls implemented using the above functions.  They are opinionated - they have fixed colours and layouts.  However, they can be used to create a powerful UI more easily.
@@ -389,7 +411,7 @@ Note that it will still return positive when clicked, even if the button is disa
 
 ### `control_selector(value, text, up_value, down_value)`
 
-Displays a control with up/down buttons and a text area.  Returns the new value.
+Displays a control with up/down buttons and a text area, to choose between a fixed number of options.  Returns the new value.
 
 ```
 // Displays a control that changes between foo/bar/baz
@@ -417,9 +439,44 @@ value = control_hslider(value, 0, 1, -3);
 value = control_hslider(value, low, high, log(high/low));
 ```
 
+### `control_textinput(string, inputstate)`
+
+Displays a single-line text input box for editing a string.
+
+`inputstate` is an opaque value representing the state of the text input.  You must keep this state and pass it back to the input every time:
+
+```
+// Two independent text inputs
+ui_split_toptext(-1);
+	input1state = control_textinput(string1, input1state);
+ui_split_next();
+	input2state = control_textinput(string2, input2state);
+ui_pop();
+```
+
+The initial value for this (upon loading a screen) should be `0`.
+
+### `control_textinput_hasfocus(inputstate)`
+
+Inspects the state to see whether it currently focused or not.
+
+### `control_textinput_focus(inputstate)`
+
+This alters the input state to set the input to be focused.
+
+Note: this does not take the focus *away* from any other inputs - you must do that yourself.
+
+### `control_textinput_unfocus(inputstate)`
+
+This alters the input state to set the input to be unfocused.
+
 ### `control_system()`
 
-This is a replacement for
+This is a replacement for `ui_system()` that includes some built-in screens:
+
+*	`"control.prompt"` - text prompt to edit a single value.  Arguments are:
+	*	`0` - the string to edit (must be mutable - see the [JSFX documentation](http://www.reaper.fm/sdk/js/strings.php#js_strings) for what that means).
+	*	`1` - a title for the prompt (or -1 for no title).
 
 ### Drawing functions
 

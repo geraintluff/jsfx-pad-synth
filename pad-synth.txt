@@ -780,6 +780,7 @@ ui_screen() == "main" ? (
 				ui_color(0, 0, 0);
 				ui_text(g_effect[FX#NAME]);
 			);
+			
 			ui_color(0, 0, 0);
 			ui_hover() && g_drageffect_index >= 0 ? (
 				ui_mouse_yratio() < 0.5 ? (
