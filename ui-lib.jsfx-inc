@@ -1,5 +1,6 @@
 @init
-uix_debug = 0;
+uix_debug_layout = 0;
+uix_round = 1;
 
 //uix_hassetup = 0;
 uix_screenstack = 0;
@@ -280,22 +281,46 @@ function ui_system() local(text, error, screen) (
 );
 
 function ui_left() (
-	uix_drawconfig_current[uix_DRAWCONFIG#LEFT];
+	uix_round ? (
+		floor(uix_drawconfig_current[uix_DRAWCONFIG#LEFT] + 0.5);
+	) : (
+		uix_drawconfig_current[uix_DRAWCONFIG#LEFT];
+	);
 );
 function ui_top() (
-	uix_drawconfig_current[uix_DRAWCONFIG#TOP];
-);
-function ui_width() (
-	uix_drawconfig_current[uix_DRAWCONFIG#WIDTH];
-);
-function ui_height() (
-	uix_drawconfig_current[uix_DRAWCONFIG#HEIGHT];
+	uix_round ? (
+		floor(uix_drawconfig_current[uix_DRAWCONFIG#TOP] + 0.5);
+	) : (
+		uix_drawconfig_current[uix_DRAWCONFIG#TOP];
+	);
 );
 function ui_bottom() (
-	uix_drawconfig_current[uix_DRAWCONFIG#TOP] + uix_drawconfig_current[uix_DRAWCONFIG#HEIGHT];
+	uix_round ? (
+		floor(uix_drawconfig_current[uix_DRAWCONFIG#TOP] + uix_drawconfig_current[uix_DRAWCONFIG#HEIGHT] + 0.5);
+	) : (
+		uix_drawconfig_current[uix_DRAWCONFIG#TOP] + uix_drawconfig_current[uix_DRAWCONFIG#HEIGHT]
+	);
 );
 function ui_right() (
-	uix_drawconfig_current[uix_DRAWCONFIG#LEFT] + uix_drawconfig_current[uix_DRAWCONFIG#WIDTH];
+	uix_round ? (
+		floor(uix_drawconfig_current[uix_DRAWCONFIG#LEFT] + uix_drawconfig_current[uix_DRAWCONFIG#WIDTH] + 0.5);
+	) : (
+		uix_drawconfig_current[uix_DRAWCONFIG#LEFT] + uix_drawconfig_current[uix_DRAWCONFIG#WIDTH];
+	);
+);
+function ui_width() (
+	uix_round ? (
+		ui_right() - ui_left();
+	) : (
+		uix_drawconfig_current[uix_DRAWCONFIG#WIDTH];
+	);
+);
+function ui_height() (
+	uix_round ? (
+		ui_bottom() - ui_top();
+	) : (
+		uix_drawconfig_current[uix_DRAWCONFIG#HEIGHT];
+	);
 );
 
 /////// Drawing operations ///////
@@ -386,10 +411,11 @@ function ui_texth() (
 
 function ui_text_width(text) local(text_h, text_w) (
 	text >= 0 ? (
+		text_w = text_h = 0;
 		uix_setgfxfont();
 		gfx_measurestr(text, text_w, text_h);
 		text_w;
-	) : ui_texth();
+	) : 0;
 );
 
 function ui_text_height(text) local(text_h, text_w) (
@@ -568,7 +594,7 @@ function ui_push() local(i, oldlayer) (
 	0;
 );
 function ui_pop() local(prev) (
-	uix_debug ? (
+	uix_debug_layout ? (
 		ui_color(
 			128 + 255*cos((uix_drawconfig_currentindex + 0 + time())*$pi/3),
 			128 + 255*cos((uix_drawconfig_currentindex + 2 + time())*$pi/3),
@@ -980,7 +1006,7 @@ function control_color_text_inset() (
 );
 
 function control_color_border() (
-	ui_colora(0, 0, 0, 0.3);
+	ui_colora(102, 102, 102, 0.5);
 );
 
 function control_border() (
@@ -1178,16 +1204,18 @@ function control_dialog(title, width, height, doneText, cancelText) local(accept
 	doneText = (doneText >= 0) ? doneText : "done";
 	ui_split_bottomtext(-1);
 		cancelText >= 0 ? (
-			ui_split_leftratio(0.5);
-				control_button(doneText) ? accepted = 1;
-			ui_split_next();
-				control_color_fill_disabled();
-				ui_fill();
-				control_color_text_disabled();
-				ui_text(cancelText);
-				control_finish_enabled(1);
-				
-				ui_click() ? accepted = -1;
+			ui_push();
+				ui_split_leftratio(0.5);
+					control_button(doneText) ? accepted = 1;
+				ui_split_next();
+					control_color_fill_disabled();
+					ui_fill();
+					control_color_text_disabled();
+					ui_text(cancelText);
+					control_finish_enabled(1);
+					
+					ui_click() ? accepted = -1;
+				ui_pop();
 			ui_pop();
 		) : (
 			control_button(doneText) ? accepted = 1;
@@ -1238,6 +1266,12 @@ function uix_control_closest_substring_width(text, targetwidth) local(text_lengt
 	best_index;
 );
 
+function uix_autoselect_char(char) (
+	// Alphanumeric (plus "." and "_") in the latin1 charset
+	char == '.' || char == '_' || (char >= '0' && char <= '9') || (char >= 'A' && char <= 'Z') || (char >= 'a' && char <= 'z')
+		|| (char >= 192 && char <= 255);
+);
+
 function control_system() local(prompt_title, prompt_text, prompt_init, prompt_selectlow, prompt_selecthigh, textx, texty, selectw, t, char, OK) (
 	ui_screen() == "control.prompt" ? (
 		prompt_text = ui_screen_get(0);
@@ -1246,11 +1280,16 @@ function control_system() local(prompt_title, prompt_text, prompt_init, prompt_s
 		prompt_selectcursor = ui_screen_get(3);
 		prompt_selecttrail = ui_screen_get(4);
 		!prompt_init ? (
+			while (gfx_getchar()) (
+				0; // Drop keys from queue
+			);
 			prompt_init = 1;
 			strcpy(#control_prompt_text, prompt_text);
 			prompt_selectlow = prompt_selecthigh = strlen(#control_prompt_text);
 			prompt_selecttrail = prompt_selectcursor = prompt_selectlow;
 		);
+		prompt_selecthigh = max(prompt_selectcursor, prompt_selecttrail);
+		prompt_selectlow = prompt_selecttrail >= 0 ? min(prompt_selectcursor, prompt_selecttrail) : prompt_selecthigh;
 
 		OK = control_dialog(prompt_title, 0, (ui_texth() + ui_vpadding()*2)*3, "done", "cancel");
 
@@ -1258,6 +1297,33 @@ function control_system() local(prompt_title, prompt_text, prompt_init, prompt_s
 			ui_align(0, 0.5);
 			control_color_fill_inset();
 			ui_fill();
+
+			ui_mouse_down() ? (
+				prompt_selectcursor = uix_control_closest_substring_width(#control_prompt_text, ui_mouse_x() - ui_hpadding());
+				prompt_selecttrail = prompt_selectcursor;
+				uix_control_cursortimeoffset = time_precise();
+			);
+			ui_drag() ? (
+				prompt_selecttrail = uix_control_closest_substring_width(#control_prompt_text, ui_mouse_x() - ui_hpadding());
+			);
+			(ui_drag() || ui_click()) && ui_clickcount() == 2 ? (
+				while (prompt_selectlow > 0 && uix_autoselect_char(str_getchar(#control_prompt_text, prompt_selectlow - 1))) (
+					prompt_selectlow -= 1;
+				);
+				while (prompt_selecthigh < strlen(#control_prompt_text) && uix_autoselect_char(str_getchar(#control_prompt_text, prompt_selecthigh))) (
+					prompt_selecthigh += 1;
+				);
+				
+				ui_click() ? (
+					ui_click_clear();
+					prompt_selectcursor = prompt_selectlow;
+					prompt_selecttrail = prompt_selecthigh;
+				);
+			);
+			ui_mouse_down_outside() ? (
+				prompt_selectcursor = strlen(#control_prompt_text);
+				prompt_selecttrail = -1; // No cursor
+			);
 			
 			control_color_text_inset();
 			ui_push();
@@ -1266,9 +1332,6 @@ function control_system() local(prompt_title, prompt_text, prompt_init, prompt_s
 				texty = ui_top();
 				gfx_x = textx;
 				gfx_y = texty;
-
-				prompt_selecthigh = max(prompt_selectcursor, prompt_selecttrail);
-				prompt_selectlow = prompt_selecttrail >= 0 ? min(prompt_selectcursor, prompt_selecttrail) : prompt_selecthigh;
 
 				ui_font_refresh();
 				strcpy_substr(#control_tmp1, #control_prompt_text, 0, prompt_selectlow);
@@ -1298,31 +1361,9 @@ function control_system() local(prompt_title, prompt_text, prompt_init, prompt_s
 			
 			control_finish_inset(1);
 			
-			ui_mouse_down() ? (
-				prompt_selectcursor = uix_control_closest_substring_width(#control_prompt_text, ui_mouse_x() - ui_hpadding());
-				prompt_selecttrail = prompt_selectcursor;
-				uix_control_cursortimeoffset = time_precise();
-			);
-			ui_drag() ? (
-				prompt_selecttrail = uix_control_closest_substring_width(#control_prompt_text, ui_mouse_x() - ui_hpadding());
-			);
-			ui_click() && ui_clickcount() == 2 ? (
-				ui_click_clear();
-				prompt_selectcursor = 0;
-				prompt_selecttrail = strlen(#control_prompt_text);
-			);
-			
-			ui_mouse_down_outside() ? (
-				prompt_selectcursor = strlen(#control_prompt_text);
-				prompt_selecttrail = -1; // No cursor
-			);
-			
 			prompt_selecttrail >= 0 ? (
 				char = gfx_getchar();
 
-				prompt_selecthigh = max(prompt_selectcursor, prompt_selecttrail);
-				prompt_selectlow = min(prompt_selectcursor, prompt_selecttrail);
-				
 				char > 0 ? (
 					char >= 32 && char < 128 ? (
 						strcpy_substr(#control_tmp1, #control_prompt_text, 0, prompt_selectlow);

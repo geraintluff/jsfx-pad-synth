@@ -195,9 +195,7 @@ function append_effect(index) local(spec, effect, effect_name) (
 
 		// Make sure effect is using the correct mutable string slot
 		effect[FX#NAME] != effect_name ? (
-			debug.copied_to.effect_name = effect_name;
 			strcpy(effect_name, effect[FX#NAME]);
-			debug.strlen = strlen(effect_name);
 			effect[FX#NAME] = effect_name;
 		);
 		
