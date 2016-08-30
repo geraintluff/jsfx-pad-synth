@@ -139,6 +139,7 @@ function effect_ui_lfo(effect) (
 		ui_pop();
 	ui_pop();
 );
+effectspec[FX_HEADER#CONFIG_SWAP_FUNCTION] = {config_swap}effect_swap_lfo;
 function effect_swap_lfo(effect, fxIndex1, fxIndex2) (
 	state = effect + fx_list_headerlength;
 
@@ -147,6 +148,7 @@ function effect_swap_lfo(effect, fxIndex1, fxIndex2) (
 	) : state[LFO_STATE#MOD_EFFECT] == fxIndex2 ? (
 		state[LFO_STATE#MOD_EFFECT] = fxIndex1;
 	);
+	// TODO: make separate effect_delete handler for this - either that, or delete handler calls this
 	state[LFO_STATE#MOD_EFFECT] < -1 ? (
 		// Our target was just deleted - reset the effect
 		effect_init_lfo(effect);
@@ -184,6 +186,7 @@ function effect_note_exec_lfo(effect, note, notestate) local(angFreq, value, tar
 
 function {effect_init}(effect_slot);
 function {config_ui}(effect);
+function {config_swap}(effect, index1, index2);
 
 function append_effect(index) local(spec, effect, effect_name) (
 	fx_list_count < fx_list_maxcount ? (
@@ -207,20 +210,40 @@ function append_effect(index) local(spec, effect, effect_name) (
 	) : -1;
 );
 // TODO: make these use function references
-function effect_swap(effect, fxIndex1, fxIndex2) local(note) (
-	// TODO: perform the swap - and swap the name strings around, otherwise they'll get out of order!
+function effect_swap(fxIndex1, fxIndex2) local(note, i, tmp, effect, effect2, spec) (
+	debug.swap1 = fxIndex1;
+	debug.swap2 = fxIndex2;
 
-	effect[FX#SPEC_INDEX] == FX_SPECLIST_INDEX#LFO ? (
-		effect_swap_lfo(effect, fxIndex1, fxIndex2);
+	// Swap the headers (copy the string values, don't swap references)
+	effect = fx_list_start + fx_list_step*fxIndex1;
+	effect2 = fx_list_start + fx_list_step*fxIndex2;
+	strcpy(#effect_swap_tmp, effect[FX#NAME]);
+	strcpy(effect[FX#NAME], effect2[FX#NAME]);
+	strcpy(effect2[FX#NAME], #effect_swap_tmp);
+	
+	tmp = effect[FX#SPEC_INDEX];
+	effect[FX#SPEC_INDEX] = effect2[FX#SPEC_INDEX];
+	effect2[FX#SPEC_INDEX] = tmp;
+	
+	// Swap the states
+	i = 0;
+	while (i < fx_list_statelength) (
+		tmp = (effect + fx_list_headerlength)[i];
+		(effect + fx_list_headerlength)[i] = (effect2 + fx_list_headerlength)[i];
+		(effect2 + fx_list_headerlength)[i] = tmp;
+		i += 1;
+	);
+
+	i = 0;
+	while (i < fx_list_count) (
+		effect = fx_list_start + fx_list_step*i;
+		spec = fx_spec_start + fx_spec_step*effect[FX#SPEC_INDEX];
+		{config_swap:spec[FX_HEADER#CONFIG_SWAP_FUNCTION]}(effect, fxIndex1, fxIndex2);
+		i += 1;
 	);
 	
 	// Stop all notes, because their internal state is now in the wrong order
-	note = notes_start;
-	while (
-		note[NOTE#ACTIVE] = 0;
-		note += notes_step;
-		note < notes_end;
-	);
+	clear_all_notes();
 );
 function effect_note_setup(effect, note, notestate) (
 	effect[FX#SPEC_INDEX] == FX_SPECLIST_INDEX#LFO ? (
@@ -716,6 +739,25 @@ ui_screen() == "main" ? (
 			fx_list_count < fx_list_maxcount ? ui_screen_open("add-effect");
 		);
 	ui_pop();
+
+	// Mouse-up applies to whole list, and comes first - otherwise when dragging downwards, the source index gets cleared before we get to dropped one
+	ui_mouse_up() ? (
+		debug.dragged += 1;
+		debug.drag_index = g_effect_index;
+		debug.drag_source = g_drageffect_index;
+		debug.drag_target = g_drageffect_targetindex;
+		while (g_drageffect_targetindex > g_drageffect_index) (
+			debug.dragoperations += 1;
+			effect_swap(g_drageffect_index, g_drageffect_index + 1);
+			g_drageffect_index += 1;
+		);
+		while (g_drageffect_targetindex < g_drageffect_index) (
+			debug.dragoperations += 1;
+			effect_swap(g_drageffect_index, g_drageffect_index - 1);
+			g_drageffect_index -= 1;
+		);
+		g_drageffect_index = -1;
+	);
 	
 	ui_split_topratio(1/fx_list_maxcount);
 	while (g_effect_index < fx_list_maxcount) (
@@ -748,20 +790,20 @@ ui_screen() == "main" ? (
 			);
 			// Drop to re-order
 			ui_hover() && g_drageffect_index >= 0 ? (
-				g_effect_index <= g_drageffect_index ? (
+				g_drageffect_targetindex = g_effect_index;
+				g_effect_index < g_drageffect_index ? (
 					ui_mouse_yratio() < 0.5 ? (
 						g_drageffect_targetindex = g_effect_index;
 					) : (
 						g_drageffect_targetindex = g_effect_index + 1;
 					);
-				) : (
+				) : g_effect_index > g_drageffect_index ? (
 					ui_mouse_yratio() < 0.5 ? (
 						g_drageffect_targetindex = g_effect_index - 1;
 					) : (
-						g_drageffect_targetindex = g_effect;
+						g_drageffect_targetindex = g_effect_index;
 					);
 				);
-				// TODO: test drops with mouse_up();
 			);
 			
 			strlen(g_effect[FX#NAME]) == 0 ? (
