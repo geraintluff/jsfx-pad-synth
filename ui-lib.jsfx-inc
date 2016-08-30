@@ -1052,6 +1052,20 @@ function control_border() (
 	ui_pop();
 );
 
+function control_readout(text) local() (
+	ui_push();
+		// Background color
+		control_color_fill_inset();
+		ui_fill();
+
+		// Text
+		control_color_text_inset();
+		ui_text(text);
+		// Highlight/shadows for depth effect
+		control_finish_inset(1);
+	ui_pop();
+);
+
 function control_indicator_button(text, status) local(click) (
 	ui_push();
 		status ? control_color_fill_enabled() : control_color_fill_disabled();
@@ -1237,30 +1251,39 @@ function control_dialog(title, width, height, doneText, cancelText) local(accept
 		ui_fill();
 	ui_pop();
 
-	doneText = (doneText >= 0) ? doneText : "done";
-	ui_split_bottomtext(-1);
-		cancelText >= 0 ? (
-			ui_push();
-				ui_split_leftratio(0.5);
-					control_button(doneText) ? accepted = 1;
-				ui_split_next();
-					control_color_fill_disabled();
-					ui_fill();
-					control_color_text_disabled();
-					ui_text(cancelText);
-					control_finish_enabled(1);
-					
-					ui_click() ? accepted = -1;
+	doneText >= 0 || cancelText >= 0 ? (
+		ui_split_bottomtext(-1);
+			cancelText >= 0 && doneText < 0 ? (
+				control_color_fill_disabled();
+				ui_fill();
+				control_color_text_disabled();
+				ui_text(cancelText);
+				control_finish_enabled(1);
+				
+				ui_click() ? accepted = -1;
+			) : cancelText >= 0 ? (
+				ui_push();
+					ui_split_leftratio(0.5);
+						control_button(doneText) ? accepted = 1;
+					ui_split_next();
+						control_color_fill_disabled();
+						ui_fill();
+						control_color_text_disabled();
+						ui_text(cancelText);
+						control_finish_enabled(1);
+						
+						ui_click() ? accepted = -1;
+					ui_pop();
 				ui_pop();
-			ui_pop();
-		) : (
-			control_button(doneText) ? accepted = 1;
-		);
-		control_color_border();
-		ui_border_left();
-		ui_border_right();
-		ui_border_bottom();
-	ui_pop();
+			) : (
+				control_button(doneText) ? accepted = 1;
+			);
+			control_color_border();
+			ui_border_left();
+			ui_border_right();
+			ui_border_bottom();
+		ui_pop();
+	);
 	
 	title >= 0 ? (
 		ui_split_toptext(title);

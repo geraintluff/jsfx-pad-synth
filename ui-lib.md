@@ -409,6 +409,10 @@ control_button("Go!", is_enabled) ? (
 
 Note that it will still return positive when clicked, even if the button is disabled, so you should check again before performing an action.
 
+### `control_readout(text)`
+
+Displays the text in an inset box.  Useful to indicate values that are variable, but are changed through a different part of the interface (e.g. another screen).
+
 ### `control_selector(value, text, up_value, down_value)`
 
 Displays a control with up/down buttons and a text area, to choose between a fixed number of options.  Returns the new value.

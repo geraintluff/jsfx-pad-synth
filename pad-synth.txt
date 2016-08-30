@@ -101,15 +101,16 @@ function effect_init_lfo(effect) local(mods, state) (
 	state = effect + fx_list_headerlength;
 	state[LFO_STATE#MOD_EFFECT(0)] = -1; // Initial target: note itself
 	state[LFO_STATE#MOD_INDEX(1)] = 1; // Note amplitude
-	state[LFO_STATE#MOD_TYPE(2)] = FX_MODTYPE#MULT;
+	// 2 was originally MOD_TYPE, but we can infer that
 	
 	state[LFO_STATE#FREQ(3)] = 5; // Freq
 	state[LFO_STATE#AMP(4)] = 0.5; // Amp
 );
 effectspec[FX_HEADER#CONFIG_UI_FUNCTION] = {config_ui}effect_ui_lfo;
-function effect_ui_lfo(effect) (
+function effect_ui_lfo(effect) local(effect_index, target_effect, target_spec, mod_spec) (
+	effect_index = (effect - fx_list_start)/fx_list_step;
 	state = effect + fx_list_headerlength;
-	ui_split_topratio(1/2);
+	ui_split_topratio(1/3);
 		ui_push_heighttext(-1);
 			ui_split_leftratio(0.2);
 				ui_align(1, -1);
@@ -137,6 +138,43 @@ function effect_ui_lfo(effect) (
 			ui_pop();
 			state[LFO_STATE#FREQ] = control_hslider(state[LFO_STATE#FREQ], 0, 100, 3);
 		ui_pop();
+	ui_split_next();
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_align(1, -1);
+				ui_padright();
+				ui_text("target");
+			ui_pop();
+			ui_split_rightratio(0.2);
+				ui_padleft();
+				ui_padright();
+				control_button("edit") ? (
+					ui_screen_open("automation-target");
+					ui_screen_set(0, state + LFO_STATE#MOD_EFFECT);
+					ui_screen_set(1, state + LFO_STATE#MOD_INDEX);
+					ui_screen_set(2, state + LFO_STATE#AMP);
+					ui_screen_set(3, effect_index);
+				);
+			ui_pop();
+			ui_split_leftratio(0.6);
+				ui_padright();
+				state[LFO_STATE#MOD_EFFECT] < 0 ? (
+					control_readout("Note");
+				) : (
+					target_effect = fx_list_start + fx_list_step*state[LFO_STATE#MOD_EFFECT];
+					control_readout(target_effect[FX#NAME]);
+				);
+			ui_split_next();
+				state[LFO_STATE#MOD_EFFECT] < 0 ? (
+					control_readout(state[LFO_STATE#MOD_INDEX] == 0 ? "Frequency" : "Amplitude");
+				) : (
+					target_effect = fx_list_start + fx_list_step*state[LFO_STATE#MOD_EFFECT];
+					target_spec = fx_spec_start + fx_spec_step*target_effect[FX#SPEC_INDEX];
+					mod_spec = target_spec + fx_spec_headerlength + fx_spec_modlength*state[LFO_STATE#MOD_INDEX];
+					control_readout(mod_spec[FX_MOD#NAME]);
+				);
+			ui_pop();
+		ui_pop();
 	ui_pop();
 );
 effectspec[FX_HEADER#CONFIG_SWAP_FUNCTION] = {config_swap}effect_swap_lfo;
@@ -155,20 +193,36 @@ function effect_swap_lfo(effect, fxIndex1, fxIndex2) (
 	);
 );
 effectspec[FX_HEADER#SETUP_NOTE_FUNCTION] = {note_setup}effect_note_setup_lfo;
-function effect_note_setup_lfo(effect, note, notestate) local(state, targetIndex) (
+function effect_note_setup_lfo(effect, note, notestate) local(state, targetIndex, targetModType, targetModRange, target_effect, target_mod) (
 	state = effect + fx_list_headerlength;
 	// Two modulatable parameters
+
+	state[LFO_STATE#MOD_EFFECT] < 0 ? (
+		state[LFO_STATE#MOD_INDEX] == 0 ? (
+			targetIndex = NOTE#LOG_FREQ;
+			targetModType = FX_MODTYPE#ADD;
+			targetModRange = 1;
+		) : (
+			targetIndex = NOTE#AMP;
+			targetModType = FX_MODTYPE#MULT;
+			targetModRange = 1;
+		);
+	) : (
+		target_effect = fx_list_start + fx_list_step*state[LFO_STATE#MOD_EFFECT];
+		target_mod = fx_spec_start + fx_spec_headerlength + fx_spec_modlength*state[LFO_STATE#MOD_INDEX];
+		
+		targetModType = target_mod[FX_MOD#TYPE];
+		targetModRange = target_mod[FX_MOD#RANGE];
+		
+		targetIndex = note_headerlength + note_fx_statelength*state[LFO_STATE#MOD_EFFECT] + state[LFO_STATE#MOD_INDEX];
+	);
+
 	notestate[LFO_NOTE_STATE#LOG_FREQ] = log(state[LFO_STATE#FREQ]); // freq
 	notestate[LFO_NOTE_STATE#AMP] = state[LFO_STATE#AMP]; // amp
 	
-	targetIndex = state[LFO_STATE#MOD_EFFECT] < 0 ? (
-		state[LFO_STATE#MOD_INDEX] == 0 ? NOTE#LOG_FREQ : NOTE#AMP;
-	) : (
-		0;
-	);
 	// Use the remainder for private state
 	notestate[LFO_NOTE_STATE#TARGET] = targetIndex;
-	notestate[LFO_NOTE_STATE#MODTYPE] = state[LFO_STATE#MOD_TYPE]; // Modulation type
+	notestate[LFO_NOTE_STATE#MODTYPE] = targetModType;
 	notestate[LFO_NOTE_STATE#PHASE] = 0; // Phase
 );
 effectspec[FX_HEADER#EXEC_NOTE_FUNCTION] = {note_exec}effect_note_exec_lfo;
@@ -634,7 +688,7 @@ ui_screen() == "main" ? (
 		control_finish_enabled(1);
 	ui_pop();
 ) : ui_screen() == "about" ? (
-	control_navbar("About", 0, 0);
+	control_navbar("About", -1, -1);
 	
 	ui_pad();
 
@@ -655,7 +709,7 @@ ui_screen() == "main" ? (
 		ui_pop();
 	ui_pop();
 ) : ui_screen() == "envelope" ? (
-	control_navbar("Envelope (ADSR)", 0, 0);
+	control_navbar("Envelope (ADSR)", -1, -1);
 	ui_split_topratio(1/5);
 		ui_push_heighttext(-1);
 			ui_split_leftratio(0.2);
@@ -728,7 +782,7 @@ ui_screen() == "main" ? (
 	ui_pop();
 ) : ui_screen() == "list-effects" ? (
 	g_effect_index = 0;
-	control_navbar("", 0, 0);
+	control_navbar("", -1, -1);
 	ui_split_bottomtext(-1);
 		control_indicator_button("add effect", fx_list_count < fx_list_maxcount) ? (
 			fx_list_count < fx_list_maxcount ? ui_screen_open("add-effect");
@@ -829,6 +883,119 @@ ui_screen() == "main" ? (
 		ui_split_next();
 	);
 	ui_pop();
+) : ui_screen() == "automation-target" ? (
+	control_dialog("Select effect", 0, 0, -1, "cancel");
+	g_arg_effect = ui_screen_get(0);
+	g_arg_index = ui_screen_get(1);
+	g_arg_range = ui_screen_get(2);
+	g_arg_minIndex = ui_screen_get(3);
+
+	g_element_height = min(ui_texth() + ui_vpadding()*2, ui_height()/(fx_list_count + 1));
+	ui_split_top(g_element_height);
+		ui_hover() ? (
+			control_button("Note");
+		) : (
+			ui_color(255, 255, 255);
+			ui_fill();
+			ui_color(0, 0, 0);
+			ui_text("Note");
+			ui_colora(0, 0, 0, 0.1);
+			ui_border_bottom();
+		);
+		ui_click() ? (
+			ui_screen_close("automation-target");
+			ui_screen_open("automation-target-index");
+			ui_screen_set(0, g_arg_effect);
+			ui_screen_set(1, g_arg_index);
+			ui_screen_set(2, g_arg_range);
+			ui_screen_set(3, -1);
+		);
+	ui_split_next();
+		gi = 0;
+		while (gi < fx_list_count) (
+			g_effect = fx_list_start + fx_list_step*gi;
+			
+			(gi <= g_arg_minIndex) ? (
+				ui_color(224, 224, 224);
+				ui_fill();
+				ui_color(180, 180, 180);
+				ui_text(g_effect[FX#NAME]);
+			) : (
+				ui_hover() ? (
+					control_button(g_effect[FX#NAME]);
+				) : (
+					ui_color(255, 255, 255);
+					ui_fill();
+					ui_color(0, 0, 0);
+					ui_text(g_effect[FX#NAME]);
+					ui_colora(0, 0, 0, 0.1);
+					ui_border_bottom();
+				);
+				
+				ui_click() ? (
+					ui_screen_close("automation-target");
+					ui_screen_open("automation-target-index");
+					ui_screen_set(0, g_arg_effect);
+					ui_screen_set(1, g_arg_index);
+					ui_screen_set(2, g_arg_range);
+					ui_screen_set(3, gi);
+				);
+			);
+		
+			ui_split_next();
+			gi += 1;
+		);
+	ui_pop();
+) : ui_screen() == "automation-target-index" ? (
+	control_dialog("Select parameter", 0, 0, -1, "cancel");
+	g_arg_effect = ui_screen_get(0);
+	g_arg_index = ui_screen_get(1);
+	g_arg_range = ui_screen_get(2);
+	g_effect_index = ui_screen_get(3);
+
+	g_effect_index >= 0 ? (
+		g_effect = fx_list_start + fx_list_step*g_effect_index;
+		g_effect_spec = fx_spec_start + fx_spec_step*g_effect[FX#SPEC_INDEX];
+		g_effect_modcount = g_effect_spec[FX_HEADER#MODCOUNT];
+	) : (
+		g_effect_modcount = 2;
+	);
+	
+	g_element_height = min(ui_texth() + ui_vpadding()*2, ui_height()/max(1, g_effect_modcount));
+	ui_split_top(g_element_height);
+		gi = 0;
+		while (gi < g_effect_modcount) (
+			g_effect_index >= 0 ? (
+				g_mod_spec = g_effect_spec + fx_spec_headerlength + fx_spec_modlength*gi;
+				g_mod_name = g_mod_spec[FX_MOD#NAME]; 
+				g_mod_range = g_mod_spec[FX_MOD#RANGE];
+			) : (
+				g_mod_name = (gi == 0) ? "Frequency" : "Amplitude";
+				g_mod_range = (gi == 0) ? 0.1 : 1;
+			);
+			
+			ui_hover() ? (
+				control_button(g_mod_name);
+			) : (
+				ui_color(255, 255, 255);
+				ui_fill();
+				ui_color(0, 0, 0);
+				ui_text(g_mod_name);
+				ui_colora(0, 0, 0, 0.1);
+				ui_border_bottom();
+			);
+			
+			ui_click() ? (
+				g_arg_effect[0] = g_effect_index;
+				g_arg_index[0] = gi;
+				g_arg_range[0] = 
+				ui_screen_close("automation-target-index");
+			);
+		
+			ui_split_next();
+			gi += 1;
+		);
+	ui_pop();
 ) : ui_screen() == "add-effect" ? (
 	append_effect(FX_SPECLIST_INDEX#LFO);
 	ui_screen_close();
@@ -836,7 +1003,7 @@ ui_screen() == "main" ? (
 	g_effect = ui_screen_get(0);
 	g_effect_spec = fx_spec_start + fx_spec_step*g_effect[FX#SPEC_INDEX];
 
-	control_navbar(g_effect[FX#NAME], 0, 0);
+	control_navbar(g_effect[FX#NAME], -1, -1);
 	effect_ui = g_effect_spec[FX_HEADER#CONFIG_UI_FUNCTION];
 	{config_ui:effect_ui}(g_effect);
 ) : control_system();
