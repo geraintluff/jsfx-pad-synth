@@ -154,6 +154,7 @@ function effect_swap_lfo(effect, fxIndex1, fxIndex2) (
 		effect_init_lfo(effect);
 	);
 );
+effectspec[FX_HEADER#SETUP_NOTE_FUNCTION] = {note_setup}effect_note_setup_lfo;
 function effect_note_setup_lfo(effect, note, notestate) local(state, targetIndex) (
 	state = effect + fx_list_headerlength;
 	// Two modulatable parameters
@@ -170,6 +171,7 @@ function effect_note_setup_lfo(effect, note, notestate) local(state, targetIndex
 	notestate[LFO_NOTE_STATE#MODTYPE] = state[LFO_STATE#MOD_TYPE]; // Modulation type
 	notestate[LFO_NOTE_STATE#PHASE] = 0; // Phase
 );
+effectspec[FX_HEADER#EXEC_NOTE_FUNCTION] = {note_exec}effect_note_exec_lfo;
 function effect_note_exec_lfo(effect, note, notestate) local(angFreq, value, targetIndex) (
 	targetIndex = notestate[LFO_NOTE_STATE#TARGET];
 	targetIndex > 0 ? (
@@ -187,6 +189,8 @@ function effect_note_exec_lfo(effect, note, notestate) local(angFreq, value, tar
 function {effect_init}(effect_slot);
 function {config_ui}(effect);
 function {config_swap}(effect, index1, index2);
+function {note_setup}(effect, note, notestate);
+function {note_exec}(effect, note, notestate);
 
 function append_effect(index) local(spec, effect, effect_name) (
 	fx_list_count < fx_list_maxcount ? (
@@ -209,11 +213,7 @@ function append_effect(index) local(spec, effect, effect_name) (
 		fx_list_count - 1; // Index before increment
 	) : -1;
 );
-// TODO: make these use function references
 function effect_swap(fxIndex1, fxIndex2) local(note, i, tmp, effect, effect2, spec) (
-	debug.swap1 = fxIndex1;
-	debug.swap2 = fxIndex2;
-
 	// Swap the headers (copy the string values, don't swap references)
 	effect = fx_list_start + fx_list_step*fxIndex1;
 	effect2 = fx_list_start + fx_list_step*fxIndex2;
@@ -244,16 +244,6 @@ function effect_swap(fxIndex1, fxIndex2) local(note, i, tmp, effect, effect2, sp
 	
 	// Stop all notes, because their internal state is now in the wrong order
 	clear_all_notes();
-);
-function effect_note_setup(effect, note, notestate) (
-	effect[FX#SPEC_INDEX] == FX_SPECLIST_INDEX#LFO ? (
-		effect_note_setup_lfo(effect, note, notestate);
-	);
-);
-function effect_note_exec(effect, note, notestate) (
-	effect[FX#SPEC_INDEX] == FX_SPECLIST_INDEX#LFO ? (
-		effect_note_exec_lfo(effect, note, notestate);
-	);
 );
 
 function reset_to_defaults() (
@@ -421,8 +411,11 @@ midi_event ? while (
 			i = 0;
 			i < fx_list_count ? while (
 				effect = fx_list_start + i*fx_list_step;
+				spec = fx_spec_start + fx_spec_step*effect[FX#SPEC_INDEX];
 				notestate = note + note_headerlength + note_fx_statelength*i;
-				effect_note_setup(effect, note, notestate);
+
+				{note_setup:spec[FX_HEADER#SETUP_NOTE_FUNCTION]}(effect, note, notestate);
+
 				i += 1;
 				i < fx_list_count;
 			);
@@ -469,8 +462,10 @@ while (
 			i = 0;
 			i < fx_list_count ? while (
 				effect = fx_list_start + i*fx_list_step;
+				spec = fx_spec_start + fx_spec_step*effect[FX#SPEC_INDEX];
 				notestate = note + note_headerlength + note_fx_statelength*i;
-				effect_note_exec(effect, note, notestate);
+
+				{note_exec:spec[FX_HEADER#EXEC_NOTE_FUNCTION]}(effect, note, notestate);
 				i += 1;
 				i < fx_list_count;
 			);
@@ -741,18 +736,12 @@ ui_screen() == "main" ? (
 	ui_pop();
 
 	// Mouse-up applies to whole list, and comes first - otherwise when dragging downwards, the source index gets cleared before we get to dropped one
-	ui_mouse_up() ? (
-		debug.dragged += 1;
-		debug.drag_index = g_effect_index;
-		debug.drag_source = g_drageffect_index;
-		debug.drag_target = g_drageffect_targetindex;
+	ui_mouse_up() && g_drageffect_index >= 0 && g_drageffect_targetindex >= 0 ? (
 		while (g_drageffect_targetindex > g_drageffect_index) (
-			debug.dragoperations += 1;
 			effect_swap(g_drageffect_index, g_drageffect_index + 1);
 			g_drageffect_index += 1;
 		);
 		while (g_drageffect_targetindex < g_drageffect_index) (
-			debug.dragoperations += 1;
 			effect_swap(g_drageffect_index, g_drageffect_index - 1);
 			g_drageffect_index -= 1;
 		);
