@@ -217,13 +217,18 @@ function effect_note_setup_lfo(effect, note, notestate) local(state, targetIndex
 		targetIndex = note_headerlength + note_fx_statelength*state[LFO_STATE#MOD_EFFECT] + state[LFO_STATE#MOD_INDEX];
 	);
 
-	notestate[LFO_NOTE_STATE#LOG_FREQ] = log(state[LFO_STATE#FREQ]); // freq
-	notestate[LFO_NOTE_STATE#AMP] = state[LFO_STATE#AMP]; // amp
+	notestate[LFO_NOTE_STATE#LOG_FREQ_BASE] = log(state[LFO_STATE#FREQ]); // freq
+	notestate[LFO_NOTE_STATE#AMP_BASE] = state[LFO_STATE#AMP]; // amp
 	
 	// Use the remainder for private state
 	notestate[LFO_NOTE_STATE#TARGET] = targetIndex;
 	notestate[LFO_NOTE_STATE#MODTYPE] = targetModType;
 	notestate[LFO_NOTE_STATE#PHASE] = 0; // Phase
+);
+effectspec[FX_HEADER#PRE_EXEC_NOTE_FUNCTION] = {note_pre_exec}effect_note_pre_exec_lfo;
+function effect_note_pre_exec_lfo(effect, note, notestate) local(angFreq, value, targetIndex) (
+	notestate[LFO_NOTE_STATE#AMP] = notestate[LFO_NOTE_STATE#AMP_BASE];
+	notestate[LFO_NOTE_STATE#LOG_FREQ] = notestate[LFO_NOTE_STATE#LOG_FREQ_BASE];
 );
 effectspec[FX_HEADER#EXEC_NOTE_FUNCTION] = {note_exec}effect_note_exec_lfo;
 function effect_note_exec_lfo(effect, note, notestate) local(angFreq, value, targetIndex) (
@@ -245,6 +250,7 @@ function {config_ui}(effect);
 function {config_swap}(effect, index1, index2);
 function {note_setup}(effect, note, notestate);
 function {note_exec}(effect, note, notestate);
+function {note_pre_exec}(effect, note, notestate);
 
 function append_effect(index) local(spec, effect, effect_name) (
 	fx_list_count < fx_list_maxcount ? (
@@ -512,16 +518,25 @@ while (
 			note[NOTE#LOG_FREQ] = note[NOTE#LOG_FREQ_BASE];
 			note[NOTE#AMP] = note[NOTE#AMP_BASE];
 			
+			// FX note parameter reset
+			i = 0;
+			while (i < fx_list_count) (
+				effect = fx_list_start + i*fx_list_step;
+				spec = fx_spec_start + fx_spec_step*effect[FX#SPEC_INDEX];
+				notestate = note + note_headerlength + note_fx_statelength*i;
+
+				{note_pre_exec:spec[FX_HEADER#PRE_EXEC_NOTE_FUNCTION]}(effect, note, notestate);
+				i += 1;
+			);
 			// FX note setup
 			i = 0;
-			i < fx_list_count ? while (
+			while (i < fx_list_count) (
 				effect = fx_list_start + i*fx_list_step;
 				spec = fx_spec_start + fx_spec_step*effect[FX#SPEC_INDEX];
 				notestate = note + note_headerlength + note_fx_statelength*i;
 
 				{note_exec:spec[FX_HEADER#EXEC_NOTE_FUNCTION]}(effect, note, notestate);
 				i += 1;
-				i < fx_list_count;
 			);
 
 			env = 1;
