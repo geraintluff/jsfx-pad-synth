@@ -145,7 +145,7 @@ wavetable_high = 4000;
 
 LFO_NOTE_STATE## > note_fx_statelength ? ui_error("note state too small for LFO");
 LFO_STATE## > fx_list_statelength ? ui_error("effect state too small for LFO");
-effectspec = fx_spec_start + fx_spec_count*FX_SPECLIST_INDEX#LFO(0);
+effectspec = fx_spec_start + fx_spec_step*FX_SPECLIST_INDEX#LFO(0);
 effectspec[FX_HEADER#NAME] = "LFO";
 effectspec[FX_HEADER#MODCOUNT] = 2;
 modspec = effectspec + fx_spec_headerlength + fx_spec_modlength*LFO_NOTE_STATE#LOG_FREQ(0);
@@ -158,9 +158,7 @@ modspec[FX_MOD#TYPE] = FX_MODTYPE#MULT;
 modspec[FX_MOD#RANGE] = 1;
 
 effectspec[FX_HEADER#FUNC_INIT] = {effect_init}effect_init_lfo;
-function effect_init_lfo(effect) local(mods, state) (
-	effect[FX#SPEC_INDEX] = FX_SPECLIST_INDEX#LFO;
-	
+function effect_init_lfo(effect) local(state) (
 	effect[FX#NAME] = "LFO Modulator";
 	
 	state = effect + fx_list_headerlength;
@@ -261,8 +259,8 @@ function effect_note_setup_lfo(effect, note, notestate) local(state) (
 	notestate[LFO_NOTE_STATE#AMP_BASE] = state[LFO_STATE#AMP]; // amp
 	
 	// Use the remainder for private state
-	debug.target_index = notestate[LFO_NOTE_STATE#TARGET] = get_mod_index(state[LFO_STATE#MOD_EFFECT], state[LFO_STATE#MOD_INDEX]);
-	debug.target_mod = notestate[LFO_NOTE_STATE#MODTYPE] = get_mod_type(state[LFO_STATE#MOD_EFFECT],
+	notestate[LFO_NOTE_STATE#TARGET] = get_mod_index(state[LFO_STATE#MOD_EFFECT], state[LFO_STATE#MOD_INDEX]);
+	notestate[LFO_NOTE_STATE#MODTYPE] = get_mod_type(state[LFO_STATE#MOD_EFFECT],
 	state[LFO_STATE#MOD_INDEX]);
 	notestate[LFO_NOTE_STATE#PHASE] = 0; // Phase
 );
@@ -286,6 +284,181 @@ function effect_note_exec_lfo(effect, note, notestate) local(angFreq, value, tar
 	);
 );
 
+//////////////// Filter ////////////////
+
+FILTER_NOTE_STATE## > note_fx_statelength ? ui_error("note state too small for filter");
+FILTER_STATE## > fx_list_statelength ? ui_error("effect state too small for filter");
+effectspec = fx_spec_start + fx_spec_step*FX_SPECLIST_INDEX#FILTER(1);
+effectspec[FX_HEADER#NAME] = "Filter";
+effectspec[FX_HEADER#MODCOUNT] = 4;
+modspec = effectspec + fx_spec_headerlength + fx_spec_modlength*FILTER_NOTE_STATE#LOG_FREQ(0);
+modspec[FX_MOD#NAME] = "Frequency";
+modspec[FX_MOD#TYPE] = FX_MODTYPE#ADD;
+modspec[FX_MOD#RANGE] = 4;
+modspec = effectspec + fx_spec_headerlength + fx_spec_modlength*FILTER_NOTE_STATE#Q(1);
+modspec[FX_MOD#NAME] = "Q-Factor";
+modspec[FX_MOD#TYPE] = FX_MODTYPE#MULT;
+modspec[FX_MOD#RANGE] = 1;
+modspec = effectspec + fx_spec_headerlength + fx_spec_modlength*FILTER_NOTE_STATE#ATTACK_AMOUNT(2);
+modspec[FX_MOD#NAME] = "Attack (start)";
+modspec[FX_MOD#TYPE] = FX_MODTYPE#ADD;
+modspec[FX_MOD#RANGE] = 2;
+modspec = effectspec + fx_spec_headerlength + fx_spec_modlength*FILTER_NOTE_STATE#ATTACK_TIME(3);
+modspec[FX_MOD#NAME] = "Attack (time)";
+modspec[FX_MOD#TYPE] = FX_MODTYPE#MULT;
+modspec[FX_MOD#RANGE] = 1;
+
+effectspec[FX_HEADER#FUNC_INIT] = {effect_init}effect_init_filter;
+function effect_init_filter(effect) local(state) (
+	debug.init_filter += 1;
+	effect[FX#NAME] = "Q-Filter";
+	
+	state = effect + fx_list_headerlength;
+	state[FILTER_STATE#FREQ(0)] = 1000;
+	state[FILTER_STATE#Q(1)] = 2;
+	state[FILTER_STATE#ATTACK_AMOUNT(2)] = 1;
+	state[FILTER_STATE#ATTACK_TIME(3)] = 0.1;
+);
+effectspec[FX_HEADER#CONFIG_UI_FUNCTION] = {config_ui}effect_ui_filter;
+function effect_ui_filter(effect) local(state, effect_index, mod_range) (
+	effect_index = (effect - fx_list_start)/fx_list_step;
+	state = effect + fx_list_headerlength;
+
+	ui_split_topratio(1/2);
+		ui_pad();
+		control_border();
+		ui_split_topratio(1/2);
+			ui_push_heighttext(-1);
+				ui_split_leftratio(0.2);
+					ui_align(1, -1);
+					ui_padright();
+					ui_text("Freq");
+				ui_pop();
+				ui_split_rightratio(0.2);
+					ui_padleft();
+					ui_align(0, -1);
+					ui_textnumber(floor(state[FILTER_STATE#FREQ] + 0.5), "%iHz");
+				ui_pop();
+				state[FILTER_STATE#FREQ] = control_hslider(state[FILTER_STATE#FREQ], 20, 18000, log(18000/20));
+			ui_pop();
+		ui_split_next();
+			ui_push_heighttext(-1);
+				ui_split_leftratio(0.2);
+					ui_align(1, -1);
+					ui_padright();
+					ui_text("Q");
+				ui_pop();
+				ui_split_rightratio(0.2);
+					ui_padleft();
+					ui_align(0, -1);
+					ui_textnumber(state[FILTER_STATE#Q], "%0.1f");
+				ui_pop();
+				state[FILTER_STATE#Q] = control_hslider(state[FILTER_STATE#Q], 0.1, 10, 3);
+			ui_pop();
+		ui_pop();
+	ui_split_next();
+		ui_pad();
+		control_border();
+		ui_split_topratio(1/2);
+			ui_push_heighttext(-1);
+				ui_split_leftratio(0.2);
+					ui_align(1, -1);
+					ui_padright();
+					ui_text("Start");
+				ui_pop();
+				ui_split_rightratio(0.2);
+					ui_padleft();
+					ui_align(0, -1);
+					ui_textnumber(exp(state[FILTER_STATE#ATTACK_AMOUNT]), "x%0.2f");
+				ui_pop();
+				state[FILTER_STATE#ATTACK_AMOUNT] = control_hslider(state[FILTER_STATE#ATTACK_AMOUNT], -5, 5, 0);
+			ui_pop();
+		ui_split_next();
+			ui_push_heighttext(-1);
+				ui_split_leftratio(0.2);
+					ui_align(1, -1);
+					ui_padright();
+					ui_text("Attack");
+				ui_pop();
+				ui_split_rightratio(0.2);
+					ui_padleft();
+					ui_align(0, -1);
+					ui_textnumber(state[FILTER_STATE#ATTACK_TIME]*1000, "%ims");
+				ui_pop();
+				state[FILTER_STATE#ATTACK_TIME] = control_hslider(state[FILTER_STATE#ATTACK_TIME], 0.001, 1.5, 3);
+			ui_pop();
+		ui_pop();
+	ui_pop();
+);
+effectspec[FX_HEADER#CONFIG_SWAP_FUNCTION] = 0;
+effectspec[FX_HEADER#CONFIG_DELETE_FUNCTION] = 0;
+effectspec[FX_HEADER#SETUP_NOTE_FUNCTION] = {note_setup}effect_note_setup_filter;
+function effect_note_setup_filter(effect, note, notestate) local(state) (
+	state = effect + fx_list_headerlength;
+
+	// Four modulatable parameters
+	notestate[FILTER_NOTE_STATE#LOG_FREQ_BASE] = log(state[FILTER_STATE#FREQ]);
+	notestate[FILTER_NOTE_STATE#Q_BASE] = state[FILTER_STATE#Q];
+	notestate[FILTER_NOTE_STATE#ATTACK_AMOUNT_BASE] = state[FILTER_STATE#ATTACK_AMOUNT];
+	notestate[FILTER_NOTE_STATE#ATTACK_TIME_BASE] = state[FILTER_STATE#ATTACK_TIME];
+	
+	// Private state
+	notestate[FILTER_NOTE_STATE#X1_L] = 0;
+	notestate[FILTER_NOTE_STATE#X2_L] = 0;
+	notestate[FILTER_NOTE_STATE#Y1_L] = 0;
+	notestate[FILTER_NOTE_STATE#Y2_L] = 0;
+	
+	notestate[FILTER_NOTE_STATE#X1_R] = 0;
+	notestate[FILTER_NOTE_STATE#X2_R] = 0;
+	notestate[FILTER_NOTE_STATE#Y1_R] = 0;
+	notestate[FILTER_NOTE_STATE#Y2_R] = 0;
+);
+effectspec[FX_HEADER#PRE_EXEC_NOTE_FUNCTION] = {note_pre_exec}effect_note_pre_exec_filter;
+function effect_note_pre_exec_filter(effect, note, notestate) (
+	notestate[FILTER_NOTE_STATE#LOG_FREQ] = notestate[FILTER_NOTE_STATE#LOG_FREQ_BASE];
+	notestate[FILTER_NOTE_STATE#Q] = notestate[FILTER_NOTE_STATE#Q_BASE];
+	notestate[FILTER_NOTE_STATE#ATTACK_AMOUNT] = notestate[FILTER_NOTE_STATE#ATTACK_AMOUNT_BASE];
+	notestate[FILTER_NOTE_STATE#ATTACK_TIME] = notestate[FILTER_NOTE_STATE#ATTACK_TIME_BASE];
+	debug.filter_q = notestate[FILTER_NOTE_STATE#Q];
+);
+effectspec[FX_HEADER#EXEC_NOTE_FUNCTION] = {note_exec}effect_note_exec_filter;
+function effect_note_exec_filter(effect, note, notestate) local(logfreq, freq, Q, w0, cosW0, alpha, a0, a1, a2, b0, b1, b2, x, y) (
+	logfreq = notestate[FILTER_NOTE_STATE#LOG_FREQ];
+	note[NOTE#SECONDSFROMSTART] < notestate[FILTER_NOTE_STATE#ATTACK_TIME] ? (
+		logfreq += notestate[FILTER_NOTE_STATE#ATTACK_AMOUNT]*(1 - note[NOTE#SECONDSFROMSTART]/notestate[FILTER_NOTE_STATE#ATTACK_TIME]);
+	);
+	freq = exp(logfreq);
+	Q = notestate[FILTER_NOTE_STATE#Q];
+	Q < 0.1 ? Q = 0.1;
+
+	w0 = 2*$pi*min(0.49, freq/srate);
+	cosW0 = cos(w0);
+	alpha = sin(w0)/(2*Q);
+	
+	a0 = 1 + alpha;
+	a1 = (-2*cosW0)/a0;
+	a2 = (1 - alpha)/a0;
+	b1 = (1 - cosW0)/a0;
+	b0 = b1/2;
+	b2 = b0;
+	
+	x = note[NOTE#AUDIO_LEFT];
+	y = b0*x + b1*notestate[FILTER_NOTE_STATE#X1_L] + b2*notestate[FILTER_NOTE_STATE#X2_L]
+		- a1*notestate[FILTER_NOTE_STATE#Y1_L] - a2*notestate[FILTER_NOTE_STATE#Y2_L];
+	notestate[FILTER_NOTE_STATE#X2_L] = notestate[FILTER_NOTE_STATE#X1_L];
+	notestate[FILTER_NOTE_STATE#X1_L] = x;
+	notestate[FILTER_NOTE_STATE#Y2_L] = notestate[FILTER_NOTE_STATE#Y1_L];
+	notestate[FILTER_NOTE_STATE#Y1_L] = note[NOTE#AUDIO_LEFT] = y;
+		
+	x = note[NOTE#AUDIO_RIGHT];
+	y = b0*x + b1*notestate[FILTER_NOTE_STATE#X1_R] + b2*notestate[FILTER_NOTE_STATE#X2_R]
+		- a1*notestate[FILTER_NOTE_STATE#Y1_R] - a2*notestate[FILTER_NOTE_STATE#Y2_R];
+	notestate[FILTER_NOTE_STATE#X2_R] = notestate[FILTER_NOTE_STATE#X1_R];
+	notestate[FILTER_NOTE_STATE#X1_R] = x;
+	notestate[FILTER_NOTE_STATE#Y2_R] = notestate[FILTER_NOTE_STATE#Y1_R];
+	notestate[FILTER_NOTE_STATE#Y1_R] = note[NOTE#AUDIO_RIGHT] = y;
+);
+
 //////////////// Effect Manipulation ////////////////
 
 function {effect_init}(effect_slot);
@@ -297,12 +470,20 @@ function {note_exec}(effect, note, notestate);
 function {note_pre_exec}(effect, note, notestate);
 
 function append_effect(index) local(spec, effect, effect_name) (
+	debug.append_effect += 1;
+	debug.append_effect_index = index;
 	fx_list_count < fx_list_maxcount ? (
 		// TODO: check the index is valid, otherwise insert placeholder (negative index)
 		effect = fx_list_start + fx_list_step*fx_list_count;
 		effect_name = string_fx_names_start + fx_list_count;
 		spec = fx_spec_start + fx_spec_step*index;
+		debug.append_effect_spec = spec;
+		debug.fx_spec_start = fx_spec_start;
+		debug.fx_spec_step = fx_spec_step;
+		debug.append_effect_spec_init = spec[FX_HEADER#FUNC_INIT];
 		{effect_init:spec[FX_HEADER#FUNC_INIT]}(effect);
+		effect[FX#SPEC_INDEX] = index;
+	
 
 		// Make sure effect is using the correct mutable string slot
 		effect[FX#NAME] != effect_name ? (
@@ -353,7 +534,7 @@ function effect_delete(fxIndex) local(i, effect, spec) (
 	fx_list_count > 0 && fxIndex >= 0 && fxIndex < fx_list_count ? (
 		while (fxIndex < fx_list_count - 1) (
 			effect_swap(fxIndex, fxIndex + 1);
-			fxIndex + 1;
+			fxIndex += 1;
 		);
 		fx_list_count -= 1;
 
@@ -586,6 +767,22 @@ while (
 			secondsFromEnd = note[NOTE#SECONDSFROMEND];
 			note[NOTE#LOG_FREQ] = note[NOTE#LOG_FREQ_BASE];
 			note[NOTE#AMP] = note[NOTE#AMP_BASE];
+
+			// Sample from waveforms
+			wavetable = wavetables_start + note[NOTE#WAVEINDEX]*wavetable_step;
+			wavetable_samples = wavetable + wavetable_headerlength;
+			midsample = note[NOTE#SAMPLEPOS];
+			lowsample = floor(midsample);
+			highsample = ceil(midsample)%wavetable_sampleslength;
+			ratio = (midsample - lowsample);
+
+			lowvalue = wavetable_samples[2*lowsample];
+			highvalue = wavetable_samples[2*highsample];
+			note[NOTE#AUDIO_LEFT] = lowvalue + (highvalue - lowvalue)*ratio;
+
+			lowvalue = wavetable_samples[2*lowsample + 1];
+			highvalue = wavetable_samples[2*highsample + 1];
+			note[NOTE#AUDIO_RIGHT] = lowvalue + (highvalue - lowvalue)*ratio;
 			
 			// FX note parameter reset
 			i = 0;
@@ -640,22 +837,8 @@ while (
 				);
 			);
 			note[NOTE#AMP] *= env;
-			
-			wavetable = wavetables_start + note[NOTE#WAVEINDEX]*wavetable_step;
-			wavetable_samples = wavetable + wavetable_headerlength;
-			midsample = note[NOTE#SAMPLEPOS];
-			lowsample = floor(midsample);
-			highsample = ceil(midsample)%wavetable_sampleslength;
-			ratio = (midsample - lowsample);
 
-			lowvalue = wavetable_samples[2*lowsample];
-			highvalue = wavetable_samples[2*highsample];
-			midvalueL = lowvalue + (highvalue - lowvalue)*ratio;
-
-			lowvalue = wavetable_samples[2*lowsample + 1];
-			highvalue = wavetable_samples[2*highsample + 1];
-			midvalueR = lowvalue + (highvalue - lowvalue)*ratio;
-			
+			// Increment position using frequency
 			wavetable_freq = wavetable[WAVETABLE#FREQ];
 			freqRatio = exp(note[NOTE#LOG_FREQ])/wavetable_freq;
 
@@ -666,8 +849,8 @@ while (
 			);
 			note[NOTE#SAMPLEPOS] = midsample;
 			
-			spl0 += midvalueL*note[NOTE#AMP];
-			spl1 += midvalueR*note[NOTE#AMP];
+			spl0 += note[NOTE#AUDIO_LEFT]*note[NOTE#AMP];
+			spl1 += note[NOTE#AUDIO_RIGHT]*note[NOTE#AMP];
 		);
 
 		note[NOTE#SECONDSFROMSTART] += invsrate;
@@ -898,7 +1081,7 @@ ui_screen() == "main" ? (
 	while (g_effect_index < fx_list_maxcount) (
 		g_effect_index < fx_list_count ? (
 			g_effect = fx_list_start + fx_list_step*g_effect_index;
-			g_effect_spec = fx_spec_start += fx_spec_step*g_effect[FX#SPEC_INDEX];
+			g_effect_spec = fx_spec_start + fx_spec_step*g_effect[FX#SPEC_INDEX];
 			ui_color(0, 0, 0);
 			ui_split_rightratio(0.15) ? (
 				control_button("edit") ? (
@@ -1088,8 +1271,30 @@ ui_screen() == "main" ? (
 		);
 	ui_pop();
 ) : ui_screen() == "add-effect" ? (
-	append_effect(FX_SPECLIST_INDEX#LFO);
-	ui_screen_close();
+	control_dialog("Add effect", 0, 0, -1, "cancel");
+	gi = 0;
+	g_element_height = min(ui_texth() + ui_vpadding()*2, ui_height()/fx_spec_count);
+	while (gi < fx_spec_count) (
+		ui_split_top(g_element_height);
+			g_spec = fx_spec_start + fx_spec_step*gi;
+			ui_hover() ? (
+				control_button(g_spec[FX_HEADER#NAME]);
+			) : (
+				ui_color(255, 255, 255);
+				ui_fill();
+				ui_color(0, 0, 0);
+				ui_text(g_spec[FX_HEADER#NAME]);
+				ui_colora(0, 0, 0, 0.1);
+				ui_border_bottom();
+			);
+			
+			ui_click() ? (
+				append_effect(gi);
+				ui_screen_close("add-effect");
+			);
+		ui_pop();
+		gi += 1;
+	);
 ) : ui_screen() == "edit-effect" ? (
 	g_effect = ui_screen_get(0);
 	g_effect_index = ui_screen_get(1);

@@ -3,16 +3,18 @@ uix_debug_layout = 0;
 uix_round = 1;
 
 //uix_hassetup = 0;
-uix_screenstack = 0;
+//uix_screenstack = 0;
 uix_screenstack_step = 10 + UI_SCREEN#; // header + 10 vars
 uix_screenstack_layercount = 10;
 //uix_screenstack_currentlayer = 0;
 
-uix_drawconfig = 0;
+//uix_drawconfig = 0;
 uix_drawconfig_step = uix_DRAWCONFIG##;
 uix_drawconfig_count = 100;
-uix_drawconfig_current = 0;
+//uix_drawconfig_current = 0;
 //uix_drawconfig_currentindex = -1;
+
+//uix_reserved_end = 0;
 
 //uix_mousecap_prev = 0;
 uix_mouseblocked = 0;
@@ -165,15 +167,18 @@ function ui_screen_set(index, value) local(screen, offset) (
 );
 
 function ui_setup(stackstart) local(uix_screenstack_end, uix_drawconfig_end) (
-	uix_hassetup = 1;
-	
-	uix_screenstack = stackstart;
-	uix_screenstack_currentlayer = 0;
-	uix_screenstack_end = stackstart + uix_screenstack_step*uix_screenstack_layercount;
-	
-	uix_drawconfig = uix_screenstack_end;
-	uix_drawconfig_end = uix_drawconfig + uix_drawconfig_step*uix_drawconfig_count;
-	uix_drawconfig_end;
+	!uix_hassetup ? (
+		uix_hassetup = 1;
+		
+		uix_screenstack = stackstart;
+		uix_screenstack_currentlayer = 0;
+		uix_screenstack_end = stackstart + uix_screenstack_step*uix_screenstack_layercount;
+		
+		uix_drawconfig = uix_screenstack_end;
+		uix_drawconfig_end = uix_drawconfig + uix_drawconfig_step*uix_drawconfig_count;
+		uix_reserved_end = uix_drawconfig_end;
+	);
+	uix_reserved_end;
 );
 
 function ui_start(defaultScreen) local(i, click, clickdelta) (

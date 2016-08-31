@@ -33,8 +33,12 @@ function functionRefs(source) {
 		if (!group) throw new Error('No function group for: ' + funName);
 		var switcherCode = 'function ' + groupName + '(' + ['function_id'].concat(group.argNames).join(', ') + ') (\n';
 		group.functions.forEach(function (func, index) {
-			if (index > 0) switcherCode += '\n: ';
-			switcherCode += '\tfunction_id == ' + group.map[func] + ' ? ' + func + '(' + group.argNames.join(', ') + ')';
+			if (index > 0) {
+				switcherCode += '\n\t: ';
+			} else {
+				switcherCode += '\t';
+			}
+			switcherCode += 'function_id == ' + group.map[func] + ' ? ' + func + '(' + group.argNames.join(', ') + ')';
 		});
 		switcherCode += ';\n)';
 		return switcherCode;
@@ -45,40 +49,6 @@ function functionRefs(source) {
 		if (!group) throw new Error('No function group defined for {' + groupName + ':' + expr + '}');
 		return groupName + '(' + expr + (untilCloseBrackets ? ', ' + untilCloseBrackets : ')');
 	});
-	
-	return source;
-};
-
-function arrowProperties(source) {
-	var propertyGroups = {};
-	source = source.replace(/->\s*([a-z0-9\-\_\.]+)/g, function (match, key) {
-		var fullKey = key;
-		var parts = key.split('.');
-		var prefix = (parts.length > 1) ? parts.shift() : '';
-		key = parts.join('.');
-
-		var group = propertyGroups[prefix] = propertyGroups[prefix] || {
-			counter: 0,
-			keys: [],
-			map: {}
-		};
-		if (!(key in group.map)) {
-			group.map[key] = group.counter++;
-			group.keys.push(fullKey);
-		}
-		return '[' + group.map[key] + '/*' + fullKey + '*/]';
-	});
-	function groupLength(prefix) {
-		var group = propertyGroups[prefix];
-		return group ? group.counter  + '/* ' + group.keys.join(', ') + ' */' : 0;
-	}
-	source = source.replace(/##/, function () {
-		return groupLength('');
-	});
-	source = source.replace(/([a-z0-9\-\_\.]+)#/g, function (match, prefix) {
-		return groupLength(prefix);
-	});
-	
 	
 	return source;
 };
@@ -101,6 +71,9 @@ function autoEnums(source) {
 		group.counter = Math.max(n + 1, group.counter);
 		if ((n in group.fixedVars) && group.fixedVars[n] !== suffix) {
 			throw new Error('Conflicting enum forcing for ' + n + ' in ' + key + ': ' + suffix + ' and ' + group.fixedVars[n]);
+		}
+		if (suffix in group.map && parseFloat(group.map[suffix]) !== n) {
+			throw new Error('Conflicting enum forcing for ' + suffix + ': ' + parseFloat(group.map[suffix]) + ' and ' + n);
 		}
 		group.fixedVars[n] = suffix;
 		group.map[suffix] = n + '/*' + key + ':' + suffix + '*/';
