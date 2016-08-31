@@ -20,6 +20,8 @@ invsrate = 1/srate;
 fftblock = 0;
 fftblock_end = 65536;
 
+options_forceduplicaterelease = 1;
+
 uiblock_end = ui_setup(fftblock_end);
 
 // Description of all effects in the system
@@ -105,7 +107,55 @@ function get_effect_name(effectIndex) local(target_effect) (
 	);
 );
 
-notes_start = fx_list_end;
+controller_values = fx_list_end;
+controller_values_end = controller_values + 128;
+function reset_controllers() (
+	i = 0;
+	while (i < 128) (
+		(i == 7 || i == 10 || (i >= 91 && i <= 95) || (i >= 70 && i <= 79) || i >= 120) ? (
+			controller_values[i] = controller_values[i];
+		) : (i >= 98 && i <= 101) ? (
+			controller_values[i] = 127;
+		) : (i != 0 && i != 32) ? (
+			controller_values[i] = 0;
+		);
+	);
+	controller_values[11] = 128;
+);
+function get_controller_name(index) (
+	index == -2 ? (
+		"Note"
+	) : index == -1 ? (
+		"Velocity"
+	) : index == 1 ? (
+		"Modulation (1)"
+	) : index == 2 ? (
+		"Breath (2)"
+	) : index == 11 ? (
+		"Expression (11)"
+	) : index == 12 ? (
+		"Effect 1 (12)"
+	) : index == 13 ? (
+		"Effect 2 (13)"
+	) : index == 64 ? (
+		"Sustain Pedal (64)"
+	) : index == 70 ? (
+		"SC-Variation (70)"
+	) : index == 71 ? (
+		"SC-Resonance (71)"
+	) : index == 72 ? (
+		"SC-Release (72)"
+	) : index == 73 ? (
+		"SC-Attack (73)"
+	) : index == 74 ? (
+		"SC-Cutoff (74)"
+	) : (
+		-1
+	);
+);
+reset_controllers();
+
+notes_start = controller_values_end;
 note_headerlength = NOTE#;
 
 note_fx_statelength = fx_list_statelength;
@@ -488,6 +538,219 @@ function effect_note_exec_filter(effect, note, notestate) local(logfreq, freq, Q
 	notestate[FILTER_NOTE_STATE#Y1_R] = note[NOTE#AUDIO_RIGHT] = y;
 );
 
+//////////////// Controller Mod ////////////////
+
+CONMOD_NOTE_STATE## > note_fx_statelength ? ui_error("note state too small for controller mod");
+CONMOD_STATE## > fx_list_statelength ? ui_error("effect state too small for controller mod");
+effectspec = fx_spec_start + fx_spec_step*FX_SPECLIST_INDEX#CONMOD(2);
+effectspec[FX_HEADER#NAME] = "Controller/Note/Vel";
+effectspec[FX_HEADER#MODCOUNT] = 0;
+
+effectspec[FX_HEADER#FUNC_INIT] = {effect_init}effect_init_conmod;
+function effect_init_conmod(effect) local(state) (
+	effect[FX#NAME] = "Control/Note/Vel Modulator";
+	
+	state = effect + fx_list_headerlength;
+	state[CONMOD_STATE#MOD_EFFECT(0)] = -1; // Initial target: note itself
+	state[CONMOD_STATE#MOD_INDEX(1)] = 0; // Frequency
+	
+	state[CONMOD_STATE#SOURCE(2)] = -1; // -2 is note, -1 is velocity
+	state[CONMOD_STATE#AMOUNT(3)] = 0.015;
+	state[CONMOD_STATE#ZERO_POINT(4)] = 0.5;
+);
+effectspec[FX_HEADER#CONFIG_UI_FUNCTION] = {config_ui}effect_ui_conmod;
+function effect_conmod_curve(value, zero_point) (
+	zero_point == 0 ? (
+		1;
+	) : zero_point == 1 ? (
+		-1;
+	) : (
+		debug.zero_point = zero_point;
+		debug.log_zero_point = log(zero_point);
+		debug.value_in = value;
+		debug.result = pow(0, 0.34);
+		2*pow(value, log(0.5)/log(zero_point)) - 1;
+	);
+);
+function effect_ui_conmod(effect) local(state, effect_index, mod_range, source, source_name, name, source_prev, source_next, i, value, y) (
+	effect_index = (effect - fx_list_start)/fx_list_step;
+	state = effect + fx_list_headerlength;
+
+	mod_range = get_mod_range(state[CONMOD_STATE#MOD_EFFECT], state[CONMOD_STATE#MOD_INDEX]);
+	ui_split_topratio(1/6);
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_align(1, -1);
+				ui_padright();
+				ui_text("source");
+			ui_pop();
+			ui_split_rightratio(0.2);
+			ui_pop();
+
+			source = state[CONMOD_STATE#SOURCE];
+			source_prev = -2;
+			source_next = source;
+			i = -2;
+			while (i < 128) (
+				name = get_controller_name(i);
+				debug.conmod_i = i;
+				debug.conmod_source = source;
+				debug.conmod_name = name;
+				name >= 0 ? (
+					i == source ? (
+						debug.conmod_source_match += 1;
+						source_name = name;
+					);
+					i < source ? source_prev = i;
+					i > source ? (
+						debug.conmod_finish = i;
+						source_next = i;
+						i = 128;
+						debug.conmod_i2 = i;
+						debug.conmod_next2 = source_next;
+					);
+				);
+				i += 1;
+			);
+			debug.conmod_next = source_next;
+			debug.conmod_prev = source_prev;
+			ui_align(0, -1);
+			state[CONMOD_STATE#SOURCE] = control_selector(source, source_name, source_next, source_prev);
+		ui_pop();
+	ui_split_next();
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_align(1, -1);
+				ui_padright();
+				ui_text("depth");
+			ui_pop();
+			ui_split_rightratio(0.2);
+				ui_padleft();
+				ui_align(0, -1);
+				ui_textnumber(floor(state[CONMOD_STATE#AMOUNT]*100/mod_range + 0.5), "%i%%");
+			ui_pop();
+			state[CONMOD_STATE#AMOUNT] = control_hslider(state[CONMOD_STATE#AMOUNT], 0, mod_range*2, 3);
+		ui_pop();
+	ui_split_next();
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_padright();
+				ui_align(1, -1);
+				ui_text("zero point");
+			ui_pop();
+			ui_split_rightratio(0.2);
+				ui_padleft();
+				ui_align(0, -1);
+				ui_textnumber(state[CONMOD_STATE#ZERO_POINT]*127, "%i");
+			ui_pop();
+			state[CONMOD_STATE#ZERO_POINT] = control_hslider(state[CONMOD_STATE#ZERO_POINT], 0, 1, 0);
+		ui_pop();
+	ui_split_next();
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_align(1, -1);
+				ui_padright();
+				ui_text("target");
+			ui_pop();
+			ui_split_rightratio(0.2);
+				ui_padleft();
+				ui_padright();
+				control_button("edit") ? (
+					ui_screen_open("automation-target");
+					ui_screen_set(0, state + CONMOD_STATE#MOD_EFFECT);
+					ui_screen_set(1, state + CONMOD_STATE#MOD_INDEX);
+					ui_screen_set(2, state + CONMOD_STATE#AMOUNT);
+					ui_screen_set(3, effect_index);
+				);
+			ui_pop();
+			ui_split_leftratio(0.6);
+				ui_padright();
+				control_readout(get_effect_name(state[CONMOD_STATE#MOD_EFFECT]));
+			ui_split_next();
+				control_readout(get_mod_name(state[CONMOD_STATE#MOD_EFFECT], state[CONMOD_STATE#MOD_INDEX]));
+			ui_pop();
+		ui_pop();
+	ui_pop();
+	
+	ui_color(0, 0, 0);
+	ui_fill();
+	ui_colora(255, 255, 255, 0.8);
+	gfx_line(ui_left(), ui_top() + ui_height()/2, ui_right(), ui_top() + ui_height()/2);
+
+	ui_color(128, 192, 255);
+	gfx_x = ui_left();
+	i = 0;
+	while (i <= 127) (
+		value = effect_conmod_curve(i/127, state[CONMOD_STATE#ZERO_POINT]);
+		y = ui_bottom() - ui_height()*(1 + value)/2;
+		debug.value = value;
+		debug.y = y;
+		debug.i = i;
+		i > 0 ? (
+			gfx_lineto(ui_left() + ui_width()*i/127, y, 1);
+		) : (
+			gfx_y = y;
+		);
+		i += 1;
+	);
+	debug.finish_i = i;
+	
+	ui_color(0, 0, 0);
+	ui_border();
+	control_finish_enabled(1);
+);
+effectspec[FX_HEADER#CONFIG_SWAP_FUNCTION] = {config_swap}effect_swap_conmod;
+function effect_swap_conmod(effect, fxIndex1, fxIndex2) (
+	state = effect + fx_list_headerlength;
+
+	state[CONMOD_STATE#MOD_EFFECT] == fxIndex1 ? (
+		state[CONMOD_STATE#MOD_EFFECT] = fxIndex2;
+	) : state[CONMOD_STATE#MOD_EFFECT] == fxIndex2 ? (
+		state[CONMOD_STATE#MOD_EFFECT] = fxIndex1;
+	);
+);
+effectspec[FX_HEADER#CONFIG_DELETE_FUNCTION] = {config_delete}effect_delete_conmod;
+function effect_delete_conmod(effect, fxIndex) (
+	state = effect + fx_list_headerlength;
+
+	state[CONMOD_STATE#MOD_EFFECT] == fxIndex ? (
+		// Our target was just deleted - reset the effect
+		effect_init_conmod(effect);
+		// Amplitude to zero
+		state[CONMOD_STATE#AMP] = 0;
+	);
+);
+effectspec[FX_HEADER#SETUP_NOTE_FUNCTION] = {note_setup}effect_note_setup_conmod;
+function effect_note_setup_conmod(effect, note, notestate) local(state, zero_point) (
+	state = effect + fx_list_headerlength;
+	
+	// Use the remainder for private state
+	notestate[CONMOD_NOTE_STATE#TARGET] = get_mod_index(state[CONMOD_STATE#MOD_EFFECT], state[CONMOD_STATE#MOD_INDEX]);
+	notestate[CONMOD_NOTE_STATE#MODTYPE] = get_mod_type(state[CONMOD_STATE#MOD_EFFECT],
+	state[CONMOD_STATE#MOD_INDEX]);
+	
+	notestate[CONMOD_NOTE_STATE#SOURCE] = state[CONMOD_STATE#SOURCE];
+	notestate[CONMOD_NOTE_STATE#AMOUNT] = state[CONMOD_STATE#AMOUNT];
+
+	zero_point = state[CONMOD_STATE#ZERO_POINT];
+	notestate[CONMOD_NOTE_STATE#CURVE_POWER] = (zero_point == 0) ? 0.0001 : (zero_point == 1) ? 10000 : log(0.5)/log(zero_point);
+);
+effectspec[FX_HEADER#PRE_EXEC_NOTE_FUNCTION] = 0;
+effectspec[FX_HEADER#EXEC_NOTE_FUNCTION] = {note_exec}effect_note_exec_conmod;
+function effect_note_exec_conmod(effect, note, notestate) local(source, value, targetIndex) (
+	targetIndex = notestate[CONMOD_NOTE_STATE#TARGET];
+	source = notestate[CONMOD_NOTE_STATE#SOURCE];
+	targetIndex >= 0 ? (
+		value = (source == -1) ? note[NOTE#VEL]/127 : (source == -2) ? note[NOTE#NOTE]/127 : controller_values[source];
+		value = (2*pow(value, notestate[CONMOD_NOTE_STATE#CURVE_POWER]) - 1)*notestate[CONMOD_NOTE_STATE#AMOUNT];
+		notestate[CONMOD_NOTE_STATE#MODTYPE] == FX_MODTYPE#ADD ? (
+			note[targetIndex] += value;
+		) : (
+			note[targetIndex] *= (1 + value);
+		);
+	);
+);
+
 //////////////// Effect Manipulation ////////////////
 
 function {effect_init}(effect_slot);
@@ -592,7 +855,6 @@ function reset_to_defaults() (
 	param_env_linear = 0;
 
 	fx_list_count = 0;
-	//append_effect(FX_SPECLIST_INDEX#LFO);
 );
 !has_set_parameters ? reset_to_defaults();
 
@@ -708,8 +970,7 @@ recompute_index < wavetables_count ? (
 
 //////////////// Parse MIDI Events ////////////////
 
-midi_event = midirecv(midi_offset, midi_msg1, midi_msg23);
-midi_event ? while (
+while (midirecv(midi_offset, midi_msg1, midi_msg23)) (
 	midisend(midi_offset, midi_msg1, midi_msg23); // passthrough
 	midi_type = midi_msg1>>4;
 	midi_channel = midi_msg1&0x0f;
@@ -718,12 +979,13 @@ midi_event ? while (
 	(midi_type == $x9 && midi_msg3 != 0) ? (
 		// Note on
 		note = notes_start;
-		while (
-			note[NOTE#ACTIVE] ? (
-				note += notes_step;
-				note < notes_end;
+		while (note[NOTE#ACTIVE] && note < notes_end) (
+			options_forceduplicaterelease && (note[NOTE#NOTE] == midi_msg2) ? (
+				// Force release of duplicate notes
+				note[NOTE#SECONDSFROMEND] = max(note[NOTE#SECONDSFROMEND], -midi_offset*invsrate);
+				note[NOTE#DECAYRATE] = 1;
 			);
-			note[NOTE#ACTIVE] && note < notes_end;
+			note += notes_step;
 		);
 		// Found a free slot
 		note < notes_end ? (
@@ -733,7 +995,8 @@ midi_event ? while (
 			note[NOTE#NOTE] = midi_msg2;
 			note[NOTE#VEL] = midi_msg3;
 			note[NOTE#SECONDSFROMSTART] = -midi_offset*invsrate;
-			note[NOTE#SECONDSFROMEND] = -note_maxduration;
+			note[NOTE#SECONDSFROMEND] = -note_maxduration - midi_offset*invsrate;
+			note[NOTE#DECAYRATE] = 0;
 			note[NOTE#LOG_FREQ_BASE] = log(440*pow(2, (note[NOTE#NOTE] - 69)/12));
 			note[NOTE#AMP_BASE] = volume*note[NOTE#VEL]/127;
 			
@@ -767,10 +1030,26 @@ midi_event ? while (
 			note += notes_step;
 			note < notes_end;
 		);
+	) : (midi_type == 11) ? (
+		midi_msg2 == 121 ? (
+			reset_controllers();
+		) : midi_msg == 123 ? (
+			note = notes_start;
+			while (note < notes_end) (
+				note[NOTE#ACTIVE] ? (
+					note[NOTE#SECONDSFROMEND] = 0;
+				);
+				note += note_step;
+			);
+		) : midi_msg == 120 ? (
+			clear_all_notes();
+		) : (
+			controller_values[midi_msg2] = midi_msg3/127;
+		);
 	);
-	
-	midi_event = midirecv(midi_offset, midi_msg1, midi_msg23);
 );
+
+debug.controller64 = controller_values[64];
 
 polyphony_current = 0;
 note = notes_start;
@@ -812,27 +1091,6 @@ while (
 			lowvalue = wavetable_samples[2*lowsample + 1];
 			highvalue = wavetable_samples[2*highsample + 1];
 			note[NOTE#AUDIO_RIGHT] = lowvalue + (highvalue - lowvalue)*ratio;
-			
-			// FX note parameter reset
-			i = 0;
-			while (i < fx_list_count) (
-				effect = fx_list_start + i*fx_list_step;
-				spec = fx_spec_start + fx_spec_step*effect[FX#SPEC_INDEX];
-				notestate = note + note_headerlength + note_fx_statelength*i;
-
-				{note_pre_exec:spec[FX_HEADER#PRE_EXEC_NOTE_FUNCTION]}(effect, note, notestate);
-				i += 1;
-			);
-			// FX note setup
-			i = 0;
-			while (i < fx_list_count) (
-				effect = fx_list_start + i*fx_list_step;
-				spec = fx_spec_start + fx_spec_step*effect[FX#SPEC_INDEX];
-				notestate = note + note_headerlength + note_fx_statelength*i;
-
-				{note_exec:spec[FX_HEADER#EXEC_NOTE_FUNCTION]}(effect, note, notestate);
-				i += 1;
-			);
 
 			env = 1;
 			stretch = param_env_linear ? 1 : 1;
@@ -866,6 +1124,27 @@ while (
 				);
 			);
 			note[NOTE#ENV] = env;
+			
+			// FX note parameter reset
+			i = 0;
+			while (i < fx_list_count) (
+				effect = fx_list_start + i*fx_list_step;
+				spec = fx_spec_start + fx_spec_step*effect[FX#SPEC_INDEX];
+				notestate = note + note_headerlength + note_fx_statelength*i;
+
+				{note_pre_exec:spec[FX_HEADER#PRE_EXEC_NOTE_FUNCTION]}(effect, note, notestate);
+				i += 1;
+			);
+			// FX note setup
+			i = 0;
+			while (i < fx_list_count) (
+				effect = fx_list_start + i*fx_list_step;
+				spec = fx_spec_start + fx_spec_step*effect[FX#SPEC_INDEX];
+				notestate = note + note_headerlength + note_fx_statelength*i;
+
+				{note_exec:spec[FX_HEADER#EXEC_NOTE_FUNCTION]}(effect, note, notestate);
+				i += 1;
+			);
 
 			// Increment position using frequency
 			wavetable_freq = wavetable[WAVETABLE#FREQ];
@@ -883,7 +1162,12 @@ while (
 		);
 
 		note[NOTE#SECONDSFROMSTART] += invsrate;
-		note[NOTE#SECONDSFROMEND] += invsrate;
+		secondsFromEnd >= 0 ? (
+			note[NOTE#DECAYRATE] = max(1 - controller_values[64], note[NOTE#DECAYRATE]);
+			note[NOTE#SECONDSFROMEND] += invsrate*note[NOTE#DECAYRATE];
+		) : (
+			note[NOTE#SECONDSFROMEND] += invsrate;
+		);
 	);
 	note += notes_step;
 	note < note_active_end;
