@@ -8,6 +8,8 @@ import ui-lib.jsfx-inc
 
 @init
 
+//////////////// Setup and Memory Layout ////////////////
+
 // can_recompute = 0;
 // action_recompute = 0;
 // recompute_index - zero initially;
@@ -139,7 +141,8 @@ wavetable_refsrate = 48000;
 wavetable_low = 50;
 wavetable_high = 4000;
 
-// Spec for LFO
+//////////////// LFO ////////////////
+
 LFO_NOTE_STATE## > note_fx_statelength ? ui_error("note state too small for LFO");
 LFO_STATE## > fx_list_statelength ? ui_error("effect state too small for LFO");
 effectspec = fx_spec_start + fx_spec_count*FX_SPECLIST_INDEX#LFO(0);
@@ -283,6 +286,8 @@ function effect_note_exec_lfo(effect, note, notestate) local(angFreq, value, tar
 	);
 );
 
+//////////////// Effect Manipulation ////////////////
+
 function {effect_init}(effect_slot);
 function {config_ui}(effect);
 function {config_swap}(effect, index1, index2);
@@ -382,6 +387,8 @@ function reset_to_defaults() (
 !has_set_parameters ? reset_to_defaults();
 
 @block
+
+//////////////// Compute Samples ////////////////
 
 action_recompute ? (
 	can_recompute = 0;
@@ -489,6 +496,8 @@ recompute_index < wavetables_count ? (
 	recompute_index = wavetable_index;
 );
 
+//////////////// Parse MIDI Events ////////////////
+
 midi_event = midirecv(midi_offset, midi_msg1, midi_msg23);
 midi_event ? while (
 	midisend(midi_offset, midi_msg1, midi_msg23); // passthrough
@@ -566,6 +575,8 @@ while (
 );
 
 @sample
+
+//////////////// Sampler ////////////////
 
 note = notes_start;
 while (
@@ -668,6 +679,8 @@ while (
 
 @gfx
 
+//////////////// Graphics ////////////////
+
 function draw_waveform() local(wavetable, samples, value, x, y, gi, gis, box_left, box_top, box_width, box_height) (
 	box_left = ui_left();
 	box_top = ui_top();
@@ -758,6 +771,12 @@ ui_screen() == "main" ? (
 		ui_color(0, 0, 0);
 		ui_fill();
 		draw_waveform();
+		ui_push();
+			ui_pad();
+			ui_align(1, 1);
+			ui_colora(255, 255, 255, 0.6);
+			ui_textnumber(polyphony_current, "x%i");
+		ui_pop();
 		control_finish_enabled(1);
 	ui_pop();
 ) : ui_screen() == "about" ? (
@@ -1102,6 +1121,8 @@ ui_screen() == "main" ? (
 ) : control_system();
 
 @serialize
+
+//////////////// Save/Restore ////////////////
 
 // Serialisation is a sequence of (id, length, value).  All unrecognised IDs (currently) result in an error.
 // We do our own string serialisation so that we can keep track of the length.
