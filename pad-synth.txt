@@ -41,6 +41,68 @@ fx_list_end = fx_list_start + fx_list_step*fx_list_maxcount;
 string_fx_names_start = 1; // So we don't mistake 0 for a valid index
 string_fx_names_end = fx_list_maxcount;
 
+function get_mod_range(effectIndex, modIndex) local(target_effect, target_mod) (
+	effectIndex < 0 ? (
+		modIndex == 0 ? (
+			0.015;
+		) : (
+			1;
+		);
+	) : (
+		target_effect = fx_list_start + fx_list_step*effectIndex;
+		target_mod = fx_spec_start + fx_spec_headerlength + fx_spec_modlength*modIndex;
+		
+		target_mod[FX_MOD#RANGE];
+	);
+);
+function get_mod_type(effectIndex, modIndex) local(target_effect, target_mod) (
+	effectIndex < 0 ? (
+		modIndex == 0 ? (
+			FX_MODTYPE#ADD;
+		) : (
+			FX_MODTYPE#MULT;
+		);
+	) : (
+		target_effect = fx_list_start + fx_list_step*effectIndex;
+		target_mod = fx_spec_start + fx_spec_headerlength + fx_spec_modlength*modIndex;
+		
+		target_mod[FX_MOD#TYPE];
+	);
+);
+function get_mod_index(effectIndex, modIndex) (
+	effectIndex < 0 ? (
+		modIndex == 0 ? (
+			NOTE#LOG_FREQ;
+		) : (
+			NOTE#AMP;
+		);
+	) : (
+		note_headerlength + note_fx_statelength*effectIndex + modIndex;
+	);
+);
+function get_mod_name(effectIndex, modIndex) local(target_effect, target_mod) (
+	effectIndex < 0 ? (
+		modIndex == 0 ? (
+			"Frequency";
+		) : (
+			"Amplitude";
+		);
+	) : (
+		target_effect = fx_list_start + fx_list_step*effectIndex;
+		target_mod = fx_spec_start + fx_spec_headerlength + fx_spec_modlength*modIndex;
+		
+		target_mod[FX_MOD#NAME];
+	);
+);
+function get_effect_name(effectIndex) local(target_effect) (
+	effectIndex < 0 ? (
+		"Note"
+	) : (
+		target_effect = fx_list_start + fx_list_step*effectIndex;
+		target_effect[FX#NAME];
+	);
+);
+
 notes_start = fx_list_end;
 note_headerlength = NOTE#;
 
@@ -107,9 +169,11 @@ function effect_init_lfo(effect) local(mods, state) (
 	state[LFO_STATE#AMP(4)] = 0.5; // Amp
 );
 effectspec[FX_HEADER#CONFIG_UI_FUNCTION] = {config_ui}effect_ui_lfo;
-function effect_ui_lfo(effect) local(effect_index, target_effect, target_spec, mod_spec) (
+function effect_ui_lfo(effect) local(state, effect_index, mod_range) (
 	effect_index = (effect - fx_list_start)/fx_list_step;
 	state = effect + fx_list_headerlength;
+
+	mod_range = get_mod_range(state[LFO_STATE#MOD_EFFECT], state[LFO_STATE#MOD_INDEX]);
 	ui_split_topratio(1/3);
 		ui_push_heighttext(-1);
 			ui_split_leftratio(0.2);
@@ -120,9 +184,9 @@ function effect_ui_lfo(effect) local(effect_index, target_effect, target_spec, m
 			ui_split_rightratio(0.2);
 				ui_padleft();
 				ui_align(0, -1);
-				ui_textnumber(floor(state[LFO_STATE#AMP]*100 + 0.5), "%i%%");
+				ui_textnumber(floor(state[LFO_STATE#AMP]*100/mod_range + 0.5), "%i%%");
 			ui_pop();
-			state[LFO_STATE#AMP] = control_hslider(state[LFO_STATE#AMP], 0, 1, 0);
+			state[LFO_STATE#AMP] = control_hslider(state[LFO_STATE#AMP], 0, mod_range*2, 3);
 		ui_pop();
 	ui_split_next();
 		ui_push_heighttext(-1);
@@ -158,21 +222,9 @@ function effect_ui_lfo(effect) local(effect_index, target_effect, target_spec, m
 			ui_pop();
 			ui_split_leftratio(0.6);
 				ui_padright();
-				state[LFO_STATE#MOD_EFFECT] < 0 ? (
-					control_readout("Note");
-				) : (
-					target_effect = fx_list_start + fx_list_step*state[LFO_STATE#MOD_EFFECT];
-					control_readout(target_effect[FX#NAME]);
-				);
+				control_readout(get_effect_name(state[LFO_STATE#MOD_EFFECT]));
 			ui_split_next();
-				state[LFO_STATE#MOD_EFFECT] < 0 ? (
-					control_readout(state[LFO_STATE#MOD_INDEX] == 0 ? "Frequency" : "Amplitude");
-				) : (
-					target_effect = fx_list_start + fx_list_step*state[LFO_STATE#MOD_EFFECT];
-					target_spec = fx_spec_start + fx_spec_step*target_effect[FX#SPEC_INDEX];
-					mod_spec = target_spec + fx_spec_headerlength + fx_spec_modlength*state[LFO_STATE#MOD_INDEX];
-					control_readout(mod_spec[FX_MOD#NAME]);
-				);
+				control_readout(get_mod_name(state[LFO_STATE#MOD_EFFECT], state[LFO_STATE#MOD_INDEX]));
 			ui_pop();
 		ui_pop();
 	ui_pop();
@@ -192,48 +244,30 @@ function effect_swap_lfo(effect, fxIndex1, fxIndex2) (
 		effect_init_lfo(effect);
 	);
 );
+
 effectspec[FX_HEADER#SETUP_NOTE_FUNCTION] = {note_setup}effect_note_setup_lfo;
-function effect_note_setup_lfo(effect, note, notestate) local(state, targetIndex, targetModType, targetModRange, target_effect, target_mod) (
+function effect_note_setup_lfo(effect, note, notestate) local(state) (
 	state = effect + fx_list_headerlength;
 	// Two modulatable parameters
-
-	state[LFO_STATE#MOD_EFFECT] < 0 ? (
-		state[LFO_STATE#MOD_INDEX] == 0 ? (
-			targetIndex = NOTE#LOG_FREQ;
-			targetModType = FX_MODTYPE#ADD;
-			targetModRange = 1;
-		) : (
-			targetIndex = NOTE#AMP;
-			targetModType = FX_MODTYPE#MULT;
-			targetModRange = 1;
-		);
-	) : (
-		target_effect = fx_list_start + fx_list_step*state[LFO_STATE#MOD_EFFECT];
-		target_mod = fx_spec_start + fx_spec_headerlength + fx_spec_modlength*state[LFO_STATE#MOD_INDEX];
-		
-		targetModType = target_mod[FX_MOD#TYPE];
-		targetModRange = target_mod[FX_MOD#RANGE];
-		
-		targetIndex = note_headerlength + note_fx_statelength*state[LFO_STATE#MOD_EFFECT] + state[LFO_STATE#MOD_INDEX];
-	);
 
 	notestate[LFO_NOTE_STATE#LOG_FREQ_BASE] = log(state[LFO_STATE#FREQ]); // freq
 	notestate[LFO_NOTE_STATE#AMP_BASE] = state[LFO_STATE#AMP]; // amp
 	
 	// Use the remainder for private state
-	notestate[LFO_NOTE_STATE#TARGET] = targetIndex;
-	notestate[LFO_NOTE_STATE#MODTYPE] = targetModType;
+	debug.target_index = notestate[LFO_NOTE_STATE#TARGET] = get_mod_index(state[LFO_STATE#MOD_EFFECT], state[LFO_STATE#MOD_INDEX]);
+	debug.target_mod = notestate[LFO_NOTE_STATE#MODTYPE] = get_mod_type(state[LFO_STATE#MOD_EFFECT],
+	state[LFO_STATE#MOD_INDEX]);
 	notestate[LFO_NOTE_STATE#PHASE] = 0; // Phase
 );
 effectspec[FX_HEADER#PRE_EXEC_NOTE_FUNCTION] = {note_pre_exec}effect_note_pre_exec_lfo;
-function effect_note_pre_exec_lfo(effect, note, notestate) local(angFreq, value, targetIndex) (
+function effect_note_pre_exec_lfo(effect, note, notestate) (
 	notestate[LFO_NOTE_STATE#AMP] = notestate[LFO_NOTE_STATE#AMP_BASE];
 	notestate[LFO_NOTE_STATE#LOG_FREQ] = notestate[LFO_NOTE_STATE#LOG_FREQ_BASE];
 );
 effectspec[FX_HEADER#EXEC_NOTE_FUNCTION] = {note_exec}effect_note_exec_lfo;
 function effect_note_exec_lfo(effect, note, notestate) local(angFreq, value, targetIndex) (
 	targetIndex = notestate[LFO_NOTE_STATE#TARGET];
-	targetIndex > 0 ? (
+	targetIndex >= 0 ? (
 		angFreq = 2*$pi*exp(notestate[LFO_NOTE_STATE#LOG_FREQ(0)])*invsrate;
 		notestate[LFO_NOTE_STATE#PHASE] += angFreq;
 		value = notestate[LFO_NOTE_STATE#AMP]*sin(notestate[LFO_NOTE_STATE#PHASE]);
@@ -499,7 +533,7 @@ polyphony_current = 0;
 note = notes_start;
 note_active_end = notes_start;
 while (
-	note[NOTE_ACTIVE] ? (
+	note[NOTE#ACTIVE] ? (
 		polyphony_current += 1;
 		note_active_end = note + notes_step;
 	);
@@ -983,10 +1017,8 @@ ui_screen() == "main" ? (
 			g_effect_index >= 0 ? (
 				g_mod_spec = g_effect_spec + fx_spec_headerlength + fx_spec_modlength*gi;
 				g_mod_name = g_mod_spec[FX_MOD#NAME]; 
-				g_mod_range = g_mod_spec[FX_MOD#RANGE];
 			) : (
 				g_mod_name = (gi == 0) ? "Frequency" : "Amplitude";
-				g_mod_range = (gi == 0) ? 0.1 : 1;
 			);
 			
 			ui_hover() ? (
@@ -1003,7 +1035,7 @@ ui_screen() == "main" ? (
 			ui_click() ? (
 				g_arg_effect[0] = g_effect_index;
 				g_arg_index[0] = gi;
-				g_arg_range[0] = 
+				g_arg_range[0] = get_mod_range(g_effect_index, gi)*0.5;
 				ui_screen_close("automation-target-index");
 			);
 		
