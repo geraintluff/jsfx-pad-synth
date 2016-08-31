@@ -836,7 +836,7 @@ while (
 						: pow(1 - secondsFromEnd/release, 3);
 				);
 			);
-			note[NOTE#AMP] *= env;
+			note[NOTE#ENV] = env;
 
 			// Increment position using frequency
 			wavetable_freq = wavetable[WAVETABLE#FREQ];
@@ -849,8 +849,8 @@ while (
 			);
 			note[NOTE#SAMPLEPOS] = midsample;
 			
-			spl0 += note[NOTE#AUDIO_LEFT]*note[NOTE#AMP];
-			spl1 += note[NOTE#AUDIO_RIGHT]*note[NOTE#AMP];
+			spl0 += note[NOTE#AUDIO_LEFT]*note[NOTE#AMP]*env;
+			spl1 += note[NOTE#AUDIO_RIGHT]*note[NOTE#AMP]*env;
 		);
 
 		note[NOTE#SECONDSFROMSTART] += invsrate;
