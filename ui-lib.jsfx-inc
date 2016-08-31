@@ -1168,7 +1168,8 @@ function control_selector(value, text, next_value, prev_value) local(buttonwidth
 	value;
 );
 
-function control_navbar(title, next_title, next_screen) local(click) (
+function control_navbar(title, next_title, next_screen) local(click, direction) (
+	direction = 0;
 	ui_split_toptext(title);
 		ui_color(255, 255, 255);
 		ui_fill();
@@ -1183,6 +1184,7 @@ function control_navbar(title, next_title, next_screen) local(click) (
 		ui_screen_level() > 0 ? (
 			ui_split_lefttext("< back");
 				control_button("< back") ? (
+					direction = -1;
 					ui_screen_close();
 				);
 			ui_pop();
@@ -1191,12 +1193,13 @@ function control_navbar(title, next_title, next_screen) local(click) (
 			next_title = next_title ? next_title : "next >";
 			ui_split_righttext(next_title);
 				control_button(next_title) ? (
-					ui_screen_open(next_screen);
+					direction = 1;
+					next_screen > 0 ? ui_screen_open(next_screen);
 				);
 			ui_pop();
 		);
 	ui_pop();
-	ui_click();
+	direction
 );
 
 function control_hslider(value, range_low, range_high, curve_bias) local(valueratio, screenratio) (

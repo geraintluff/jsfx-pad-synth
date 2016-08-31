@@ -163,7 +163,6 @@ function effect_init_lfo(effect) local(mods, state) (
 	state = effect + fx_list_headerlength;
 	state[LFO_STATE#MOD_EFFECT(0)] = -1; // Initial target: note itself
 	state[LFO_STATE#MOD_INDEX(1)] = 1; // Note amplitude
-	// 2 was originally MOD_TYPE, but we can infer that
 	
 	state[LFO_STATE#FREQ(3)] = 5; // Freq
 	state[LFO_STATE#AMP(4)] = 0.5; // Amp
@@ -238,13 +237,18 @@ function effect_swap_lfo(effect, fxIndex1, fxIndex2) (
 	) : state[LFO_STATE#MOD_EFFECT] == fxIndex2 ? (
 		state[LFO_STATE#MOD_EFFECT] = fxIndex1;
 	);
-	// TODO: make separate effect_delete handler for this - either that, or delete handler calls this
-	state[LFO_STATE#MOD_EFFECT] < -1 ? (
+);
+effectspec[FX_HEADER#CONFIG_DELETE_FUNCTION] = {config_delete}effect_delete_lfo;
+function effect_delete_lfo(effect, fxIndex) (
+	state = effect + fx_list_headerlength;
+
+	state[LFO_STATE#MOD_EFFECT] == fxIndex ? (
 		// Our target was just deleted - reset the effect
 		effect_init_lfo(effect);
+		// Amplitude to zero
+		state[LFO_STATE#AMP] = 0;
 	);
 );
-
 effectspec[FX_HEADER#SETUP_NOTE_FUNCTION] = {note_setup}effect_note_setup_lfo;
 function effect_note_setup_lfo(effect, note, notestate) local(state) (
 	state = effect + fx_list_headerlength;
@@ -282,6 +286,7 @@ function effect_note_exec_lfo(effect, note, notestate) local(angFreq, value, tar
 function {effect_init}(effect_slot);
 function {config_ui}(effect);
 function {config_swap}(effect, index1, index2);
+function {config_delete}(effect, index);
 function {note_setup}(effect, note, notestate);
 function {note_exec}(effect, note, notestate);
 function {note_pre_exec}(effect, note, notestate);
@@ -338,6 +343,25 @@ function effect_swap(fxIndex1, fxIndex2) local(note, i, tmp, effect, effect2, sp
 	
 	// Stop all notes, because their internal state is now in the wrong order
 	clear_all_notes();
+);
+function effect_delete(fxIndex) local(i, effect, spec) (
+	fx_list_count > 0 && fxIndex >= 0 && fxIndex < fx_list_count ? (
+		while (fxIndex < fx_list_count - 1) (
+			effect_swap(fxIndex, fxIndex + 1);
+			fxIndex + 1;
+		);
+		fx_list_count -= 1;
+
+		i = 0;
+		while (i < fx_list_count) (
+			effect = fx_list_start + fx_list_step*i;
+			spec = fx_spec_start + fx_spec_step*effect[FX#SPEC_INDEX];
+			{config_delete:spec[FX_HEADER#CONFIG_DELETE_FUNCTION]}(effect, fx_list_count);
+			i += 1;
+		);
+	) : (
+		ui_error("Invalid effect deletion");
+	);
 );
 
 function reset_to_defaults() (
@@ -861,6 +885,7 @@ ui_screen() == "main" ? (
 				control_button("edit") ? (
 					ui_screen_open("edit-effect");
 					ui_screen_set(0, g_effect);
+					ui_screen_set(1, g_effect_index);
 				);
 			);
 			ui_pop();
@@ -1048,11 +1073,32 @@ ui_screen() == "main" ? (
 	ui_screen_close();
 ) : ui_screen() == "edit-effect" ? (
 	g_effect = ui_screen_get(0);
+	g_effect_index = ui_screen_get(1);
 	g_effect_spec = fx_spec_start + fx_spec_step*g_effect[FX#SPEC_INDEX];
 
-	control_navbar(g_effect[FX#NAME], -1, -1);
+	control_navbar(g_effect[FX#NAME], "Delete", 0) == 1 ? (
+		ui_screen_open("delete-effect");
+		ui_screen_set(0, g_effect);
+		ui_screen_set(1, g_effect_index);
+	);
 	effect_ui = g_effect_spec[FX_HEADER#CONFIG_UI_FUNCTION];
 	{config_ui:effect_ui}(g_effect);
+) : ui_screen() == "delete-effect" ? (
+	g_effect = ui_screen_get(0);
+	g_effect_index = ui_screen_get(1);
+	control_dialog("Confirm delete", 0, 0, "delete", "cancel") == 1 ? (
+		effect_delete(g_effect_index);
+		ui_screen_close_to("list-effects");
+	);
+	ui_split_topratio(0.5);
+		ui_align(0.5, 1);
+		ui_color(128, 0, 0);
+		ui_text("Delete effect:");
+	ui_split_next();
+		ui_align(0.5, 0);
+		ui_color(0, 0, 0);
+		ui_text(get_effect_name(g_effect_index));
+	ui_pop();
 ) : control_system();
 
 @serialize
