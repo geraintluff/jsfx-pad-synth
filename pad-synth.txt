@@ -45,7 +45,7 @@ fx_list_end = fx_list_start + fx_list_step*fx_list_maxcount;
 string_fx_names_start = 1; // So we don't mistake 0 for a valid index
 string_fx_names_end = fx_list_maxcount;
 
-function get_mod_range(effectIndex, modIndex) local(target_effect, target_mod) (
+function get_mod_range(effectIndex, modIndex) local(target_effect, target_spec, target_mod) (
 	effectIndex < 0 ? (
 		modIndex == 0 ? (
 			0.03;
@@ -54,7 +54,8 @@ function get_mod_range(effectIndex, modIndex) local(target_effect, target_mod) (
 		);
 	) : (
 		target_effect = fx_list_start + fx_list_step*effectIndex;
-		target_mod = fx_spec_start + fx_spec_headerlength + fx_spec_modlength*modIndex;
+		target_spec = fx_spec_start + fx_spec_step*target_effect[FX#SPEC_INDEX];
+		target_mod = target_spec + fx_spec_headerlength + fx_spec_modlength*modIndex;
 		
 		target_mod[FX_MOD#RANGE];
 	);
@@ -68,7 +69,8 @@ function get_mod_type(effectIndex, modIndex) local(target_effect, target_mod) (
 		);
 	) : (
 		target_effect = fx_list_start + fx_list_step*effectIndex;
-		target_mod = fx_spec_start + fx_spec_headerlength + fx_spec_modlength*modIndex;
+		target_spec = fx_spec_start + fx_spec_step*target_effect[FX#SPEC_INDEX];
+		target_mod = target_spec + fx_spec_headerlength + fx_spec_modlength*modIndex;
 		
 		target_mod[FX_MOD#TYPE];
 	);
@@ -93,7 +95,8 @@ function get_mod_name(effectIndex, modIndex) local(target_effect, target_mod) (
 		);
 	) : (
 		target_effect = fx_list_start + fx_list_step*effectIndex;
-		target_mod = fx_spec_start + fx_spec_headerlength + fx_spec_modlength*modIndex;
+		target_spec = fx_spec_start + fx_spec_step*target_effect[FX#SPEC_INDEX];
+		target_mod = target_spec + fx_spec_headerlength + fx_spec_modlength*modIndex;
 		
 		target_mod[FX_MOD#NAME];
 	);
@@ -390,7 +393,7 @@ modspec[FX_MOD#RANGE] = 1;
 effectspec[FX_HEADER#FUNC_INIT] = {effect_init}effect_init_filter;
 function effect_init_filter(effect) local(state) (
 	debug.init_filter += 1;
-	effect[FX#NAME] = "Q-Filter";
+	effect[FX#NAME] = "Filter";
 	
 	state = effect + fx_list_headerlength;
 	state[FILTER_STATE#FREQ(0)] = 1000;
@@ -1270,7 +1273,7 @@ ui_screen() == "main" ? (
 		ui_push();
 			ui_pad();
 			ui_align(1, 1);
-			ui_colora(255, 255, 255, 0.6);
+			ui_colora(255, 255, 255, 0.8);
 			ui_textnumber(polyphony_current, "x%i");
 		ui_pop();
 		control_finish_enabled(1);
