@@ -879,6 +879,9 @@ function effect_note_setup_conmod(effect, note, notestate) local(state) (
 
 	notestate[CONMOD_NOTE_STATE#CURVE_POWER] = exp(state[CONMOD_STATE#CURVE]);
 	notestate[CONMOD_NOTE_STATE#OFFSET] = pow(state[CONMOD_STATE#ZERO_POINT], notestate[CONMOD_NOTE_STATE#CURVE_POWER]);
+	
+	notestate[CONMOD_NOTE_STATE#VALUE] = -1;
+	notestate[CONMOD_NOTE_STATE#SLEWFACTOR] = 1/0.005/srate;
 );
 effectspec[FX_HEADER#PRE_EXEC_NOTE_FUNCTION] = 0;
 effectspec[FX_HEADER#EXEC_NOTE_FUNCTION] = {note_exec}effect_note_exec_conmod;
@@ -888,6 +891,11 @@ function effect_note_exec_conmod(effect, note, notestate) local(source, value, t
 	targetIndex >= 0 ? (
 		value = (source == -1) ? note[NOTE#VEL]/127 : (source == -2) ? note[NOTE#NOTE]/127 : controller_values[source];
 		value = notestate[CONMOD_NOTE_STATE#AMOUNT]*2*(pow(value, notestate[CONMOD_NOTE_STATE#CURVE_POWER]) - notestate[CONMOD_NOTE_STATE#OFFSET]);
+		notestate[CONMOD_NOTE_STATE#VALUE] < 0 ? (
+			notestate[CONMOD_NOTE_STATE#VALUE] = value;
+		) : (
+			value = notestate[CONMOD_NOTE_STATE#VALUE] = notestate[CONMOD_NOTE_STATE#VALUE] + (value - notestate[CONMOD_NOTE_STATE#VALUE])*notestate[CONMOD_NOTE_STATE#SLEWFACTOR];
+		);
 		notestate[CONMOD_NOTE_STATE#MODTYPE] == FX_MODTYPE#ADD ? (
 			note[targetIndex] += value;
 		) : (
