@@ -724,7 +724,7 @@ function effect_ui_conmod(effect) local(state, effect_index, mod_range, source, 
 	state = effect + fx_list_headerlength;
 
 	mod_range = get_mod_range(state[CONMOD_STATE#MOD_EFFECT], state[CONMOD_STATE#MOD_INDEX]);
-	ui_split_topratio(1/6);
+	ui_split_topratio(1/9);
 		ui_push_heighttext(-1);
 			ui_split_leftratio(0.2);
 				ui_align(1, -1);
