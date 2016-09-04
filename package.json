@@ -2,7 +2,7 @@
   "name": "jsfx-padsynth",
   "version": "1.0.0",
   "description": "",
-  "main": "pad-synth.js",
+  "main": "build.js",
   "dependencies": {
     "jsfx-preprocessor": "^1.0.0"
   },
@@ -10,7 +10,7 @@
   "scripts": {
     "build": "node build.js"
   },
-  "author": "",
+  "author": "Geraint Luff <luffgd@gmail.com>",
   "license": "ISC",
   "private": true
 }

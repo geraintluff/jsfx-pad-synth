@@ -20,17 +20,17 @@ polyphony = 64;
 invsrate = 1/srate;
 
 function get_waveform_name(index) (
-	index == WAVEFORM#SAWTOOTH(0) ? "Sawtooth"
-	: index == WAVEFORM#TRIANGLE(1) ? "Triangle"
-	: index == WAVEFORM#SINE(2) ? "Sine"
-	: index == WAVEFORM#SQUARE(3) ? "Square"
+	index == 0/*WAVEFORM:SAWTOOTH*/ ? "Sawtooth"
+	: index == 1/*WAVEFORM:TRIANGLE*/ ? "Triangle"
+	: index == 2/*WAVEFORM:SINE*/ ? "Sine"
+	: index == 3/*WAVEFORM:SQUARE*/ ? "Square"
 	: "(???)";
 );
 function get_warptype_name(index) (
-	index == WAVEFORM_WARPTYPE#POWER(0) ? "power"
-	: index == WAVEFORM_WARPTYPE#CLIP(1) ? "clip"
-	: index == WAVEFORM_WARPTYPE#TANH(2) ? "tanh(x)"
-	: index == WAVEFORM_WARPTYPE#SIN(3) ? "sin(x)"
+	index == 0/*WAVEFORM_WARPTYPE:POWER*/ ? "power"
+	: index == 1/*WAVEFORM_WARPTYPE:CLIP*/ ? "clip"
+	: index == 2/*WAVEFORM_WARPTYPE:TANH*/ ? "tanh(x)"
+	: index == 3/*WAVEFORM_WARPTYPE:SIN*/ ? "sin(x)"
 	: "(???)";
 );
 
@@ -61,27 +61,27 @@ function get_waveform_value(pos) local(value, warpfactor) (
 		while (pos < 0) (pos += 1);
 	);
 
-	param_waveform_type == WAVEFORM#SAWTOOTH ? (
+	param_waveform_type == 0/*WAVEFORM:SAWTOOTH*/ ? (
 		value = (pos > 0.5) ? (pos - 1)*2 : 2*pos;
-	) : param_waveform_type == WAVEFORM#TRIANGLE ? (
+	) : param_waveform_type == 1/*WAVEFORM:TRIANGLE*/ ? (
 		value = pos < 0.25 ? pos*4
 		: pos < 0.75 ? 2 - pos*4
 		: (pos - 1)*4;
-	) : param_waveform_type == WAVEFORM#SINE ? (
+	) : param_waveform_type == 2/*WAVEFORM:SINE*/ ? (
 		value = sin(pos*2*$pi);
-	) : param_waveform_type == WAVEFORM#SQUARE ? (
+	) : param_waveform_type == 3/*WAVEFORM:SQUARE*/ ? (
 		value = pos < 0.5 ? -1 : 1;
 	) : 0;
 	
 	param_waveform_warpamount > 0 ? (
 		warpfactor = exp(param_waveform_warpamount);
-		param_waveform_warptype == WAVEFORM_WARPTYPE#SIN ? (
+		param_waveform_warptype == 3/*WAVEFORM_WARPTYPE:SIN*/ ? (
 			value = sin(asin(value)*warpfactor);
-		) : param_waveform_warptype == WAVEFORM_WARPTYPE#CLIP ? (
+		) : param_waveform_warptype == 1/*WAVEFORM_WARPTYPE:CLIP*/ ? (
 			value = max(-1, min(1, value*warpfactor));
-		) : param_waveform_warptype == WAVEFORM_WARPTYPE#POWER ? (
+		) : param_waveform_warptype == 0/*WAVEFORM_WARPTYPE:POWER*/ ? (
 			value = 2*pow(0.5*value + 0.5, warpfactor) - 1;
-		) : param_waveform_warptype == WAVEFORM_WARPTYPE#TANH ? (
+		) : param_waveform_warptype == 2/*WAVEFORM_WARPTYPE:TANH*/ ? (
 			value = tanh(atanh(value)*warpfactor);
 		);
 	);
@@ -132,9 +132,9 @@ uiblock_end = ui_setup(gen_spectrum_end);
 
 // Description of all effects in the system
 fx_spec_start = uiblock_end;
-fx_spec_count = FX_SPECLIST_INDEX##;
-fx_spec_headerlength = FX_HEADER##;
-fx_spec_modlength = FX_MOD##;
+fx_spec_count = 3/*FX_SPECLIST_INDEX: */;
+fx_spec_headerlength = 9/*FX_HEADER: NAME, MODCOUNT, FUNC_INIT, CONFIG_UI_FUNCTION, CONFIG_SWAP_FUNCTION, CONFIG_DELETE_FUNCTION, SETUP_NOTE_FUNCTION, PRE_EXEC_NOTE_FUNCTION, EXEC_NOTE_FUNCTION*/;
+fx_spec_modlength = 3/*FX_MOD: RANGE, TYPE, NAME*/;
 fx_spec_var_count = 10; // Maximum number of modulatable parameters
 fx_spec_step = fx_spec_headerlength + fx_spec_modlength*fx_spec_var_count;
 fx_spec_end = fx_spec_start + fx_spec_step*fx_spec_count;
@@ -142,7 +142,7 @@ fx_spec_end = fx_spec_start + fx_spec_step*fx_spec_count;
 fx_list_start = fx_spec_end;
 //fx_list_count = 0; // Don't actually reset it here, it'll wipe all effects on playback restart!
 fx_list_maxcount = 10;
-fx_list_headerlength = FX##;
+fx_list_headerlength = 2/*FX: SPEC_INDEX, NAME*/;
 fx_list_statelength = 16;
 fx_list_step = fx_list_headerlength + fx_list_statelength;
 fx_list_end = fx_list_start + fx_list_step*fx_list_maxcount;
@@ -160,33 +160,33 @@ function get_mod_range(effectIndex, modIndex) local(target_effect, target_spec, 
 		);
 	) : (
 		target_effect = fx_list_start + fx_list_step*effectIndex;
-		target_spec = fx_spec_start + fx_spec_step*target_effect[FX#SPEC_INDEX];
+		target_spec = fx_spec_start + fx_spec_step*target_effect[0/*FX:SPEC_INDEX*/];
 		target_mod = target_spec + fx_spec_headerlength + fx_spec_modlength*modIndex;
 		
-		target_mod[FX_MOD#RANGE];
+		target_mod[0/*FX_MOD:RANGE*/];
 	);
 );
 function get_mod_type(effectIndex, modIndex) local(target_effect, target_mod) (
 	effectIndex < 0 ? (
 		modIndex == 0 ? (
-			FX_MODTYPE#ADD;
+			0/*FX_MODTYPE:ADD*/;
 		) : (
-			FX_MODTYPE#MULT;
+			1/*FX_MODTYPE:MULT*/;
 		);
 	) : (
 		target_effect = fx_list_start + fx_list_step*effectIndex;
-		target_spec = fx_spec_start + fx_spec_step*target_effect[FX#SPEC_INDEX];
+		target_spec = fx_spec_start + fx_spec_step*target_effect[0/*FX:SPEC_INDEX*/];
 		target_mod = target_spec + fx_spec_headerlength + fx_spec_modlength*modIndex;
 		
-		target_mod[FX_MOD#TYPE];
+		target_mod[1/*FX_MOD:TYPE*/];
 	);
 );
 function get_mod_index(effectIndex, modIndex) (
 	effectIndex < 0 ? (
 		modIndex == 0 ? (
-			NOTE#LOG_FREQ;
+			0/*NOTE:LOG_FREQ*/;
 		) : (
-			NOTE#AMP;
+			1/*NOTE:AMP*/;
 		);
 	) : (
 		note_headerlength + note_fx_statelength*effectIndex + modIndex;
@@ -201,10 +201,10 @@ function get_mod_name(effectIndex, modIndex) local(target_effect, target_mod) (
 		);
 	) : (
 		target_effect = fx_list_start + fx_list_step*effectIndex;
-		target_spec = fx_spec_start + fx_spec_step*target_effect[FX#SPEC_INDEX];
+		target_spec = fx_spec_start + fx_spec_step*target_effect[0/*FX:SPEC_INDEX*/];
 		target_mod = target_spec + fx_spec_headerlength + fx_spec_modlength*modIndex;
 		
-		target_mod[FX_MOD#NAME];
+		target_mod[2/*FX_MOD:NAME*/];
 	);
 );
 function get_effect_name(effectIndex) local(target_effect) (
@@ -212,7 +212,7 @@ function get_effect_name(effectIndex) local(target_effect) (
 		"Note"
 	) : (
 		target_effect = fx_list_start + fx_list_step*effectIndex;
-		target_effect[FX#NAME];
+		target_effect[1/*FX:NAME*/];
 	);
 );
 
@@ -224,12 +224,12 @@ function reset_controllers() (
 		(i == 7 || i == 10 || (i >= 91 && i <= 95) || (i >= 70 && i <= 79) || i >= 120) ? (
 			controller_values[i] = controller_values[i];
 		) : (i >= 98 && i <= 101) ? (
-			controller_values[i] = 1;
+			controller_values[i] = 127;
 		) : (i != 0 && i != 32) ? (
 			controller_values[i] = 0;
 		);
 	);
-	controller_values[11] = 1;
+	controller_values[11] = 128;
 );
 function get_controller_name(index) (
 	index == -2 ? (
@@ -265,7 +265,7 @@ function get_controller_name(index) (
 reset_controllers();
 
 notes_start = controller_values_end;
-note_headerlength = NOTE#;
+note_headerlength = 16/*NOTE: LOG_FREQ, AMP, ACTIVE, VEL, NOTE, SECONDSFROMSTART, AUDIO_LEFT, AUDIO_RIGHT, SECONDSFROMEND, DECAYRATE, CHANNEL, LOG_FREQ_BASE, AMP_BASE, WAVEINDEX, SAMPLEPOS, ENV*/;
 
 note_fx_statelength = fx_list_statelength;
 notes_step = note_headerlength + note_fx_statelength*fx_list_maxcount;
@@ -274,7 +274,7 @@ notes_end = notes_start + polyphony*notes_step;
 function clear_all_notes() local(note) (
 	note = notes_start;
 	while (
-		note[NOTE#ACTIVE] = 0;
+		note[2/*NOTE:ACTIVE*/] = 0;
 		note += notes_step;
 		note < notes_end;
 	);
@@ -284,7 +284,7 @@ clear_all_notes();
 wavetables_start = notes_end;
 wavetables_count = 18;
 wavetable_sampleslength = 32768;
-wavetable_headerlength = WAVETABLE##; // Freq
+wavetable_headerlength = 1/*WAVETABLE: FREQ*/; // Freq
 wavetable_step = wavetable_headerlength + wavetable_sampleslength*2;
 wavetables_end = wavetables_start + wavetables_count*wavetable_step;
 
@@ -302,38 +302,38 @@ wavetable_high = 4000;
 
 //////////////// LFO ////////////////
 
-LFO_NOTE_STATE## > note_fx_statelength ? ui_error("note state too small for LFO");
-LFO_STATE## > fx_list_statelength ? ui_error("effect state too small for LFO");
-effectspec = fx_spec_start + fx_spec_step*FX_SPECLIST_INDEX#LFO(0);
-effectspec[FX_HEADER#NAME] = "LFO";
-effectspec[FX_HEADER#MODCOUNT] = 2;
-modspec = effectspec + fx_spec_headerlength + fx_spec_modlength*LFO_NOTE_STATE#LOG_FREQ(0);
-modspec[FX_MOD#NAME] = "Frequency";
-modspec[FX_MOD#TYPE] = FX_MODTYPE#ADD;
-modspec[FX_MOD#RANGE] = 2;
-modspec = effectspec + fx_spec_headerlength + fx_spec_modlength*LFO_NOTE_STATE#AMP(1);
-modspec[FX_MOD#NAME] = "Amount";
-modspec[FX_MOD#TYPE] = FX_MODTYPE#MULT;
-modspec[FX_MOD#RANGE] = 1;
+7/*LFO_NOTE_STATE: LOG_FREQ_BASE, AMP_BASE, TARGET, MODTYPE, PHASE*/ > note_fx_statelength ? ui_error("note state too small for LFO");
+6/*LFO_STATE: */ > fx_list_statelength ? ui_error("effect state too small for LFO");
+effectspec = fx_spec_start + fx_spec_step*0/*FX_SPECLIST_INDEX:LFO*/;
+effectspec[0/*FX_HEADER:NAME*/] = "LFO";
+effectspec[1/*FX_HEADER:MODCOUNT*/] = 2;
+modspec = effectspec + fx_spec_headerlength + fx_spec_modlength*0/*LFO_NOTE_STATE:LOG_FREQ*/;
+modspec[2/*FX_MOD:NAME*/] = "Frequency";
+modspec[1/*FX_MOD:TYPE*/] = 0/*FX_MODTYPE:ADD*/;
+modspec[0/*FX_MOD:RANGE*/] = 2;
+modspec = effectspec + fx_spec_headerlength + fx_spec_modlength*1/*LFO_NOTE_STATE:AMP*/;
+modspec[2/*FX_MOD:NAME*/] = "Amount";
+modspec[1/*FX_MOD:TYPE*/] = 1/*FX_MODTYPE:MULT*/;
+modspec[0/*FX_MOD:RANGE*/] = 1;
 
-effectspec[FX_HEADER#FUNC_INIT] = {effect_init}effect_init_lfo;
+effectspec[2/*FX_HEADER:FUNC_INIT*/] = 1/*effect_init_lfo*/;
 function effect_init_lfo(effect) local(state) (
-	effect[FX#NAME] = "LFO Modulator";
+	effect[1/*FX:NAME*/] = "LFO Modulator";
 	
 	state = effect + fx_list_headerlength;
-	state[LFO_STATE#MOD_EFFECT(0)] = -1; // Initial target: note itself
-	state[LFO_STATE#MOD_INDEX(1)] = 1; // Note amplitude
+	state[0/*LFO_STATE:MOD_EFFECT*/] = -1; // Initial target: note itself
+	state[1/*LFO_STATE:MOD_INDEX*/] = 1; // Note amplitude
 	
-	state[LFO_STATE#FREQ(3)] = 5; // Freq
-	state[LFO_STATE#AMP(4)] = 0.5; // Amp
-	state[LFO_STATE#PHASE_START(5)] = 0; // Negative means "random", positive is phase
+	state[3/*LFO_STATE:FREQ*/] = 5; // Freq
+	state[4/*LFO_STATE:AMP*/] = 0.5; // Amp
+	state[5/*LFO_STATE:PHASE_START*/] = 0; // Negative means "random", positive is phase
 );
-effectspec[FX_HEADER#CONFIG_UI_FUNCTION] = {config_ui}effect_ui_lfo;
+effectspec[3/*FX_HEADER:CONFIG_UI_FUNCTION*/] = 1/*effect_ui_lfo*/;
 function effect_ui_lfo(effect) local(state, effect_index, mod_range) (
 	effect_index = (effect - fx_list_start)/fx_list_step;
 	state = effect + fx_list_headerlength;
 
-	mod_range = get_mod_range(state[LFO_STATE#MOD_EFFECT], state[LFO_STATE#MOD_INDEX]);
+	mod_range = get_mod_range(state[0/*LFO_STATE:MOD_EFFECT*/], state[1/*LFO_STATE:MOD_INDEX*/]);
 	ui_split_topratio(1/4);
 		ui_push_heighttext(-1);
 			ui_split_leftratio(0.2);
@@ -344,9 +344,9 @@ function effect_ui_lfo(effect) local(state, effect_index, mod_range) (
 			ui_split_rightratio(0.2);
 				ui_padleft();
 				ui_align(0, -1);
-				ui_textnumber(floor(state[LFO_STATE#AMP]*100/mod_range + 0.5), "%i%%");
+				ui_textnumber(floor(state[4/*LFO_STATE:AMP*/]*100/mod_range + 0.5), "%i%%");
 			ui_pop();
-			state[LFO_STATE#AMP] = control_hslider(state[LFO_STATE#AMP], 0, mod_range*2, 3);
+			state[4/*LFO_STATE:AMP*/] = control_hslider(state[4/*LFO_STATE:AMP*/], 0, mod_range*2, 3);
 		ui_pop();
 	ui_split_next();
 		ui_push_heighttext(-1);
@@ -358,9 +358,9 @@ function effect_ui_lfo(effect) local(state, effect_index, mod_range) (
 			ui_split_rightratio(0.2);
 				ui_padleft();
 				ui_align(0, -1);
-				ui_textnumber(state[LFO_STATE#FREQ], "%.2fHz");
+				ui_textnumber(state[3/*LFO_STATE:FREQ*/], "%.2fHz");
 			ui_pop();
-			state[LFO_STATE#FREQ] = control_hslider(state[LFO_STATE#FREQ], 0, 100, 3);
+			state[3/*LFO_STATE:FREQ*/] = control_hslider(state[3/*LFO_STATE:FREQ*/], 0, 100, 3);
 		ui_pop();
 	ui_split_next();
 		ui_push_heighttext(-1);
@@ -372,18 +372,18 @@ function effect_ui_lfo(effect) local(state, effect_index, mod_range) (
 			ui_split_rightratio(0.2);
 			ui_pop();
 			ui_split_lefttext("constant");
-				control_button(state[LFO_STATE#PHASE_START] >= 0 ? "constant" : "random") ? (
-					state[LFO_STATE#PHASE_START] >= 0 ? (
-						state[LFO_STATE#PHASE_START] = -1;
+				control_button(state[5/*LFO_STATE:PHASE_START*/] >= 0 ? "constant" : "random") ? (
+					state[5/*LFO_STATE:PHASE_START*/] >= 0 ? (
+						state[5/*LFO_STATE:PHASE_START*/] = -1;
 					) : (
-						state[LFO_STATE#PHASE_START] = 0;
+						state[5/*LFO_STATE:PHASE_START*/] = 0;
 					);
 				);
 			ui_pop();
 			
 			ui_padleft();
-			state[LFO_STATE#PHASE_START] >= 0 ? (
-				state[LFO_STATE#PHASE_START] = control_hslider(state[LFO_STATE#PHASE_START], 0, 2*$pi, 0);
+			state[5/*LFO_STATE:PHASE_START*/] >= 0 ? (
+				state[5/*LFO_STATE:PHASE_START*/] = control_hslider(state[5/*LFO_STATE:PHASE_START*/], 0, 2*$pi, 0);
 			);
 		ui_pop();
 	ui_split_next();
@@ -398,73 +398,73 @@ function effect_ui_lfo(effect) local(state, effect_index, mod_range) (
 				ui_padright();
 				control_button("edit") ? (
 					ui_screen_open("automation-target");
-					ui_screen_set(0, state + LFO_STATE#MOD_EFFECT);
-					ui_screen_set(1, state + LFO_STATE#MOD_INDEX);
-					ui_screen_set(2, state + LFO_STATE#AMP);
+					ui_screen_set(0, state + 0/*LFO_STATE:MOD_EFFECT*/);
+					ui_screen_set(1, state + 1/*LFO_STATE:MOD_INDEX*/);
+					ui_screen_set(2, state + 4/*LFO_STATE:AMP*/);
 					ui_screen_set(3, effect_index);
 				);
 			ui_pop();
 			ui_split_leftratio(0.6);
 				ui_padright();
-				control_readout(get_effect_name(state[LFO_STATE#MOD_EFFECT]));
+				control_readout(get_effect_name(state[0/*LFO_STATE:MOD_EFFECT*/]));
 			ui_split_next();
-				control_readout(get_mod_name(state[LFO_STATE#MOD_EFFECT], state[LFO_STATE#MOD_INDEX]));
+				control_readout(get_mod_name(state[0/*LFO_STATE:MOD_EFFECT*/], state[1/*LFO_STATE:MOD_INDEX*/]));
 			ui_pop();
 		ui_pop();
 	ui_pop();
 );
-effectspec[FX_HEADER#CONFIG_SWAP_FUNCTION] = {config_swap}effect_swap_lfo;
+effectspec[4/*FX_HEADER:CONFIG_SWAP_FUNCTION*/] = 1/*effect_swap_lfo*/;
 function effect_swap_lfo(effect, fxIndex1, fxIndex2) (
 	state = effect + fx_list_headerlength;
 
-	state[LFO_STATE#MOD_EFFECT] == fxIndex1 ? (
-		state[LFO_STATE#MOD_EFFECT] = fxIndex2;
-	) : state[LFO_STATE#MOD_EFFECT] == fxIndex2 ? (
-		state[LFO_STATE#MOD_EFFECT] = fxIndex1;
+	state[0/*LFO_STATE:MOD_EFFECT*/] == fxIndex1 ? (
+		state[0/*LFO_STATE:MOD_EFFECT*/] = fxIndex2;
+	) : state[0/*LFO_STATE:MOD_EFFECT*/] == fxIndex2 ? (
+		state[0/*LFO_STATE:MOD_EFFECT*/] = fxIndex1;
 	);
 );
-effectspec[FX_HEADER#CONFIG_DELETE_FUNCTION] = {config_delete}effect_delete_lfo;
+effectspec[5/*FX_HEADER:CONFIG_DELETE_FUNCTION*/] = 1/*effect_delete_lfo*/;
 function effect_delete_lfo(effect, fxIndex) (
 	state = effect + fx_list_headerlength;
 
-	state[LFO_STATE#MOD_EFFECT] == fxIndex ? (
+	state[0/*LFO_STATE:MOD_EFFECT*/] == fxIndex ? (
 		// Our target was just deleted - reset the effect
 		effect_init_lfo(effect);
 		// Amplitude to zero
-		state[LFO_STATE#AMP] = 0;
+		state[4/*LFO_STATE:AMP*/] = 0;
 	);
 );
-effectspec[FX_HEADER#SETUP_NOTE_FUNCTION] = {note_setup}effect_note_setup_lfo;
+effectspec[6/*FX_HEADER:SETUP_NOTE_FUNCTION*/] = 1/*effect_note_setup_lfo*/;
 function effect_note_setup_lfo(effect, note, notestate) local(state) (
 	state = effect + fx_list_headerlength;
 	// Two modulatable parameters
 
-	notestate[LFO_NOTE_STATE#LOG_FREQ_BASE] = log(state[LFO_STATE#FREQ]); // freq
-	notestate[LFO_NOTE_STATE#AMP_BASE] = state[LFO_STATE#AMP]; // amp
+	notestate[2/*LFO_NOTE_STATE:LOG_FREQ_BASE*/] = log(state[3/*LFO_STATE:FREQ*/]); // freq
+	notestate[3/*LFO_NOTE_STATE:AMP_BASE*/] = state[4/*LFO_STATE:AMP*/]; // amp
 	
 	// Use the remainder for private state
-	notestate[LFO_NOTE_STATE#TARGET] = get_mod_index(state[LFO_STATE#MOD_EFFECT], state[LFO_STATE#MOD_INDEX]);
-	notestate[LFO_NOTE_STATE#MODTYPE] = get_mod_type(state[LFO_STATE#MOD_EFFECT],
-	state[LFO_STATE#MOD_INDEX]);
-	notestate[LFO_NOTE_STATE#PHASE] = (state[LFO_STATE#PHASE_START] >= 0) ? (
-		state[LFO_STATE#PHASE_START];
+	notestate[4/*LFO_NOTE_STATE:TARGET*/] = get_mod_index(state[0/*LFO_STATE:MOD_EFFECT*/], state[1/*LFO_STATE:MOD_INDEX*/]);
+	notestate[5/*LFO_NOTE_STATE:MODTYPE*/] = get_mod_type(state[0/*LFO_STATE:MOD_EFFECT*/],
+	state[1/*LFO_STATE:MOD_INDEX*/]);
+	notestate[6/*LFO_NOTE_STATE:PHASE*/] = (state[5/*LFO_STATE:PHASE_START*/] >= 0) ? (
+		state[5/*LFO_STATE:PHASE_START*/];
 	) : (
 		rand(2*$pi);
 	);
 );
-effectspec[FX_HEADER#PRE_EXEC_NOTE_FUNCTION] = {note_pre_exec}effect_note_pre_exec_lfo;
+effectspec[7/*FX_HEADER:PRE_EXEC_NOTE_FUNCTION*/] = 1/*effect_note_pre_exec_lfo*/;
 function effect_note_pre_exec_lfo(effect, note, notestate) (
-	notestate[LFO_NOTE_STATE#AMP] = notestate[LFO_NOTE_STATE#AMP_BASE];
-	notestate[LFO_NOTE_STATE#LOG_FREQ] = notestate[LFO_NOTE_STATE#LOG_FREQ_BASE];
+	notestate[1/*LFO_NOTE_STATE:AMP*/] = notestate[3/*LFO_NOTE_STATE:AMP_BASE*/];
+	notestate[0/*LFO_NOTE_STATE:LOG_FREQ*/] = notestate[2/*LFO_NOTE_STATE:LOG_FREQ_BASE*/];
 );
-effectspec[FX_HEADER#EXEC_NOTE_FUNCTION] = {note_exec}effect_note_exec_lfo;
+effectspec[8/*FX_HEADER:EXEC_NOTE_FUNCTION*/] = 1/*effect_note_exec_lfo*/;
 function effect_note_exec_lfo(effect, note, notestate) local(angFreq, value, targetIndex) (
-	targetIndex = notestate[LFO_NOTE_STATE#TARGET];
+	targetIndex = notestate[4/*LFO_NOTE_STATE:TARGET*/];
 	targetIndex >= 0 ? (
-		angFreq = 2*$pi*exp(notestate[LFO_NOTE_STATE#LOG_FREQ(0)])*invsrate;
-		notestate[LFO_NOTE_STATE#PHASE] += angFreq;
-		value = notestate[LFO_NOTE_STATE#AMP]*sin(notestate[LFO_NOTE_STATE#PHASE]);
-		notestate[LFO_NOTE_STATE#MODTYPE] == FX_MODTYPE#ADD ? (
+		angFreq = 2*$pi*exp(notestate[0/*LFO_NOTE_STATE:LOG_FREQ*/])*invsrate;
+		notestate[6/*LFO_NOTE_STATE:PHASE*/] += angFreq;
+		value = notestate[1/*LFO_NOTE_STATE:AMP*/]*sin(notestate[6/*LFO_NOTE_STATE:PHASE*/]);
+		notestate[5/*LFO_NOTE_STATE:MODTYPE*/] == 0/*FX_MODTYPE:ADD*/ ? (
 			note[targetIndex] += value;
 		) : (
 			note[targetIndex] *= max(0, 1 + value);
@@ -474,44 +474,44 @@ function effect_note_exec_lfo(effect, note, notestate) local(angFreq, value, tar
 
 //////////////// Filter ////////////////
 
-FILTER_NOTE_STATE## > note_fx_statelength ? ui_error("note state too small for filter");
-FILTER_STATE## > fx_list_statelength ? ui_error("effect state too small for filter");
-effectspec = fx_spec_start + fx_spec_step*FX_SPECLIST_INDEX#FILTER(1);
-effectspec[FX_HEADER#NAME] = "Filter";
-effectspec[FX_HEADER#MODCOUNT] = 4;
-modspec = effectspec + fx_spec_headerlength + fx_spec_modlength*FILTER_NOTE_STATE#LOG_FREQ(0);
-modspec[FX_MOD#NAME] = "Frequency";
-modspec[FX_MOD#TYPE] = FX_MODTYPE#ADD;
-modspec[FX_MOD#RANGE] = 4;
-modspec = effectspec + fx_spec_headerlength + fx_spec_modlength*FILTER_NOTE_STATE#Q(1);
-modspec[FX_MOD#NAME] = "Q-Factor";
-modspec[FX_MOD#TYPE] = FX_MODTYPE#MULT;
-modspec[FX_MOD#RANGE] = 1;
-modspec = effectspec + fx_spec_headerlength + fx_spec_modlength*FILTER_NOTE_STATE#ATTACK_AMOUNT(2);
-modspec[FX_MOD#NAME] = "Attack (start)";
-modspec[FX_MOD#TYPE] = FX_MODTYPE#ADD;
-modspec[FX_MOD#RANGE] = 2;
-modspec = effectspec + fx_spec_headerlength + fx_spec_modlength*FILTER_NOTE_STATE#ATTACK_TIME(3);
-modspec[FX_MOD#NAME] = "Attack (time)";
-modspec[FX_MOD#TYPE] = FX_MODTYPE#MULT;
-modspec[FX_MOD#RANGE] = 1;
+16/*FILTER_NOTE_STATE: LOG_FREQ_BASE, Q_BASE, ATTACK_AMOUNT_BASE, ATTACK_TIME_BASE, X1_L, X2_L, Y1_L, Y2_L, X1_R, X2_R, Y1_R, Y2_R*/ > note_fx_statelength ? ui_error("note state too small for filter");
+7/*FILTER_STATE: ATTACK_AMOUNT_VELOCITY, FREQ_LOG_VELOCITY, FREQ_LOG_NOTE*/ > fx_list_statelength ? ui_error("effect state too small for filter");
+effectspec = fx_spec_start + fx_spec_step*1/*FX_SPECLIST_INDEX:FILTER*/;
+effectspec[0/*FX_HEADER:NAME*/] = "Filter";
+effectspec[1/*FX_HEADER:MODCOUNT*/] = 4;
+modspec = effectspec + fx_spec_headerlength + fx_spec_modlength*0/*FILTER_NOTE_STATE:LOG_FREQ*/;
+modspec[2/*FX_MOD:NAME*/] = "Frequency";
+modspec[1/*FX_MOD:TYPE*/] = 0/*FX_MODTYPE:ADD*/;
+modspec[0/*FX_MOD:RANGE*/] = 4;
+modspec = effectspec + fx_spec_headerlength + fx_spec_modlength*1/*FILTER_NOTE_STATE:Q*/;
+modspec[2/*FX_MOD:NAME*/] = "Q-Factor";
+modspec[1/*FX_MOD:TYPE*/] = 1/*FX_MODTYPE:MULT*/;
+modspec[0/*FX_MOD:RANGE*/] = 1;
+modspec = effectspec + fx_spec_headerlength + fx_spec_modlength*2/*FILTER_NOTE_STATE:ATTACK_AMOUNT*/;
+modspec[2/*FX_MOD:NAME*/] = "Attack (start)";
+modspec[1/*FX_MOD:TYPE*/] = 0/*FX_MODTYPE:ADD*/;
+modspec[0/*FX_MOD:RANGE*/] = 2;
+modspec = effectspec + fx_spec_headerlength + fx_spec_modlength*3/*FILTER_NOTE_STATE:ATTACK_TIME*/;
+modspec[2/*FX_MOD:NAME*/] = "Attack (time)";
+modspec[1/*FX_MOD:TYPE*/] = 1/*FX_MODTYPE:MULT*/;
+modspec[0/*FX_MOD:RANGE*/] = 1;
 
-effectspec[FX_HEADER#FUNC_INIT] = {effect_init}effect_init_filter;
+effectspec[2/*FX_HEADER:FUNC_INIT*/] = 2/*effect_init_filter*/;
 function effect_init_filter(effect) local(state) (
-	effect[FX#NAME] = "Filter";
+	effect[1/*FX:NAME*/] = "Filter";
 	
 	state = effect + fx_list_headerlength;
-	state[FILTER_STATE#FREQ(0)] = 1000;
-	state[FILTER_STATE#Q(1)] = 2;
-	state[FILTER_STATE#ATTACK_AMOUNT(2)] = 0;
-	state[FILTER_STATE#ATTACK_TIME(3)] = 0.1;
+	state[0/*FILTER_STATE:FREQ*/] = 1000;
+	state[1/*FILTER_STATE:Q*/] = 2;
+	state[2/*FILTER_STATE:ATTACK_AMOUNT*/] = 0;
+	state[3/*FILTER_STATE:ATTACK_TIME*/] = 0.1;
 
 	// Private state
-	state[FILTER_STATE#ATTACK_AMOUNT_VELOCITY] = log(10);
-	state[FILTER_STATE#FREQ_LOG_VELOCITY] = log(5);
-	state[FILTER_STATE#FREQ_LOG_NOTE] = 0.5;
+	state[4/*FILTER_STATE:ATTACK_AMOUNT_VELOCITY*/] = log(10);
+	state[5/*FILTER_STATE:FREQ_LOG_VELOCITY*/] = log(5);
+	state[6/*FILTER_STATE:FREQ_LOG_NOTE*/] = 0.5;
 );
-effectspec[FX_HEADER#CONFIG_UI_FUNCTION] = {config_ui}effect_ui_filter;
+effectspec[3/*FX_HEADER:CONFIG_UI_FUNCTION*/] = 2/*effect_ui_filter*/;
 function effect_ui_filter(effect) local(state, effect_index, mod_range) (
 	effect_index = (effect - fx_list_start)/fx_list_step;
 	state = effect + fx_list_headerlength;
@@ -528,9 +528,9 @@ function effect_ui_filter(effect) local(state, effect_index, mod_range) (
 				ui_split_rightratio(0.2);
 					ui_padleft();
 					ui_align(0, -1);
-					ui_textnumber(floor(state[FILTER_STATE#FREQ] + 0.5), "%iHz");
+					ui_textnumber(floor(state[0/*FILTER_STATE:FREQ*/] + 0.5), "%iHz");
 				ui_pop();
-				state[FILTER_STATE#FREQ] = control_hslider(state[FILTER_STATE#FREQ], 20, 18000, log(18000/20));
+				state[0/*FILTER_STATE:FREQ*/] = control_hslider(state[0/*FILTER_STATE:FREQ*/], 20, 18000, log(18000/20));
 			ui_pop();
 		ui_split_next();
 			ui_push_heighttext(-1);
@@ -542,9 +542,9 @@ function effect_ui_filter(effect) local(state, effect_index, mod_range) (
 				ui_split_rightratio(0.2);
 					ui_padleft();
 					ui_align(0, -1);
-					ui_textnumber(state[FILTER_STATE#Q], "%0.1f");
+					ui_textnumber(state[1/*FILTER_STATE:Q*/], "%0.1f");
 				ui_pop();
-				state[FILTER_STATE#Q] = control_hslider(state[FILTER_STATE#Q], 0.1, 10, 3);
+				state[1/*FILTER_STATE:Q*/] = control_hslider(state[1/*FILTER_STATE:Q*/], 0.1, 10, 3);
 			ui_pop();
 		ui_split_next();
 			ui_push_heighttext(-1);
@@ -556,9 +556,9 @@ function effect_ui_filter(effect) local(state, effect_index, mod_range) (
 				ui_split_rightratio(0.2);
 					ui_padleft();
 					ui_align(0, -1);
-					ui_textnumber(exp(state[FILTER_STATE#FREQ_LOG_VELOCITY]), "x%0.2f");
+					ui_textnumber(exp(state[5/*FILTER_STATE:FREQ_LOG_VELOCITY*/]), "x%0.2f");
 				ui_pop();
-				state[FILTER_STATE#FREQ_LOG_VELOCITY] = control_hslider(state[FILTER_STATE#FREQ_LOG_VELOCITY], 0, log(20), -1);
+				state[5/*FILTER_STATE:FREQ_LOG_VELOCITY*/] = control_hslider(state[5/*FILTER_STATE:FREQ_LOG_VELOCITY*/], 0, log(20), -1);
 			ui_pop();
 		ui_split_next();
 			ui_push_heighttext(-1);
@@ -570,9 +570,9 @@ function effect_ui_filter(effect) local(state, effect_index, mod_range) (
 				ui_split_rightratio(0.2);
 					ui_padleft();
 					ui_align(0, -1);
-					ui_textnumber(floor(state[FILTER_STATE#FREQ_LOG_NOTE]*100 + 0.5), "%i%%");
+					ui_textnumber(floor(state[6/*FILTER_STATE:FREQ_LOG_NOTE*/]*100 + 0.5), "%i%%");
 				ui_pop();
-				state[FILTER_STATE#FREQ_LOG_NOTE] = control_hslider(state[FILTER_STATE#FREQ_LOG_NOTE], -1, 2, 0);
+				state[6/*FILTER_STATE:FREQ_LOG_NOTE*/] = control_hslider(state[6/*FILTER_STATE:FREQ_LOG_NOTE*/], -1, 2, 0);
 			ui_pop();
 		ui_pop();
 	ui_split_next();
@@ -587,9 +587,9 @@ function effect_ui_filter(effect) local(state, effect_index, mod_range) (
 				ui_split_rightratio(0.2);
 					ui_padleft();
 					ui_align(0, -1);
-					ui_textnumber(state[FILTER_STATE#ATTACK_TIME]*1000, "%ims");
+					ui_textnumber(state[3/*FILTER_STATE:ATTACK_TIME*/]*1000, "%ims");
 				ui_pop();
-				state[FILTER_STATE#ATTACK_TIME] = control_hslider(state[FILTER_STATE#ATTACK_TIME], 0.001, 1.5, 3);
+				state[3/*FILTER_STATE:ATTACK_TIME*/] = control_hslider(state[3/*FILTER_STATE:ATTACK_TIME*/], 0.001, 1.5, 3);
 			ui_pop();
 		ui_split_next();
 			ui_push_heighttext(-1);
@@ -601,9 +601,9 @@ function effect_ui_filter(effect) local(state, effect_index, mod_range) (
 				ui_split_rightratio(0.2);
 					ui_padleft();
 					ui_align(0, -1);
-					ui_textnumber(exp(state[FILTER_STATE#ATTACK_AMOUNT]), "x%0.2f");
+					ui_textnumber(exp(state[2/*FILTER_STATE:ATTACK_AMOUNT*/]), "x%0.2f");
 				ui_pop();
-				state[FILTER_STATE#ATTACK_AMOUNT] = control_hslider(state[FILTER_STATE#ATTACK_AMOUNT], -5, 5, 0);
+				state[2/*FILTER_STATE:ATTACK_AMOUNT*/] = control_hslider(state[2/*FILTER_STATE:ATTACK_AMOUNT*/], -5, 5, 0);
 			ui_pop();
 		ui_split_next();
 			ui_push_heighttext(-1);
@@ -615,54 +615,54 @@ function effect_ui_filter(effect) local(state, effect_index, mod_range) (
 				ui_split_rightratio(0.2);
 					ui_padleft();
 					ui_align(0, -1);
-					ui_textnumber(exp(state[FILTER_STATE#ATTACK_AMOUNT_VELOCITY]), "x%0.2f");
+					ui_textnumber(exp(state[4/*FILTER_STATE:ATTACK_AMOUNT_VELOCITY*/]), "x%0.2f");
 				ui_pop();
-				state[FILTER_STATE#ATTACK_AMOUNT_VELOCITY] = control_hslider(state[FILTER_STATE#ATTACK_AMOUNT_VELOCITY], 0, log(20), -1);
+				state[4/*FILTER_STATE:ATTACK_AMOUNT_VELOCITY*/] = control_hslider(state[4/*FILTER_STATE:ATTACK_AMOUNT_VELOCITY*/], 0, log(20), -1);
 			ui_pop();
 		ui_pop();
 	ui_pop();
 );
-effectspec[FX_HEADER#CONFIG_SWAP_FUNCTION] = 0;
-effectspec[FX_HEADER#CONFIG_DELETE_FUNCTION] = 0;
-effectspec[FX_HEADER#SETUP_NOTE_FUNCTION] = {note_setup}effect_note_setup_filter;
+effectspec[4/*FX_HEADER:CONFIG_SWAP_FUNCTION*/] = 0;
+effectspec[5/*FX_HEADER:CONFIG_DELETE_FUNCTION*/] = 0;
+effectspec[6/*FX_HEADER:SETUP_NOTE_FUNCTION*/] = 2/*effect_note_setup_filter*/;
 function effect_note_setup_filter(effect, note, notestate) local(state) (
 	state = effect + fx_list_headerlength;
 
 	// Four modulatable parameters
-	notestate[FILTER_NOTE_STATE#LOG_FREQ_BASE] = log(state[FILTER_STATE#FREQ]);
-	notestate[FILTER_NOTE_STATE#LOG_FREQ_BASE] += state[FILTER_STATE#FREQ_LOG_VELOCITY]*(note[NOTE#VEL] - 64)/127;
-	notestate[FILTER_NOTE_STATE#LOG_FREQ_BASE] += state[FILTER_STATE#FREQ_LOG_NOTE]*(note[NOTE#NOTE] - 64)*log(2)/12;
-	notestate[FILTER_NOTE_STATE#Q_BASE] = state[FILTER_STATE#Q];
-	notestate[FILTER_NOTE_STATE#ATTACK_AMOUNT_BASE] = state[FILTER_STATE#ATTACK_AMOUNT];
-	notestate[FILTER_NOTE_STATE#ATTACK_AMOUNT_BASE] += state[FILTER_STATE#ATTACK_AMOUNT_VELOCITY]*note[NOTE#VEL]/127;
-	notestate[FILTER_NOTE_STATE#ATTACK_TIME_BASE] = state[FILTER_STATE#ATTACK_TIME];
+	notestate[4/*FILTER_NOTE_STATE:LOG_FREQ_BASE*/] = log(state[0/*FILTER_STATE:FREQ*/]);
+	notestate[4/*FILTER_NOTE_STATE:LOG_FREQ_BASE*/] += state[5/*FILTER_STATE:FREQ_LOG_VELOCITY*/]*(note[3/*NOTE:VEL*/] - 64)/127;
+	notestate[4/*FILTER_NOTE_STATE:LOG_FREQ_BASE*/] += state[6/*FILTER_STATE:FREQ_LOG_NOTE*/]*(note[4/*NOTE:NOTE*/] - 64)*log(2)/12;
+	notestate[5/*FILTER_NOTE_STATE:Q_BASE*/] = state[1/*FILTER_STATE:Q*/];
+	notestate[6/*FILTER_NOTE_STATE:ATTACK_AMOUNT_BASE*/] = state[2/*FILTER_STATE:ATTACK_AMOUNT*/];
+	notestate[6/*FILTER_NOTE_STATE:ATTACK_AMOUNT_BASE*/] += state[4/*FILTER_STATE:ATTACK_AMOUNT_VELOCITY*/]*note[3/*NOTE:VEL*/]/127;
+	notestate[7/*FILTER_NOTE_STATE:ATTACK_TIME_BASE*/] = state[3/*FILTER_STATE:ATTACK_TIME*/];
 	
 	// Private state
-	notestate[FILTER_NOTE_STATE#X1_L] = 0;
-	notestate[FILTER_NOTE_STATE#X2_L] = 0;
-	notestate[FILTER_NOTE_STATE#Y1_L] = 0;
-	notestate[FILTER_NOTE_STATE#Y2_L] = 0;
+	notestate[8/*FILTER_NOTE_STATE:X1_L*/] = 0;
+	notestate[9/*FILTER_NOTE_STATE:X2_L*/] = 0;
+	notestate[10/*FILTER_NOTE_STATE:Y1_L*/] = 0;
+	notestate[11/*FILTER_NOTE_STATE:Y2_L*/] = 0;
 	
-	notestate[FILTER_NOTE_STATE#X1_R] = 0;
-	notestate[FILTER_NOTE_STATE#X2_R] = 0;
-	notestate[FILTER_NOTE_STATE#Y1_R] = 0;
-	notestate[FILTER_NOTE_STATE#Y2_R] = 0;
+	notestate[12/*FILTER_NOTE_STATE:X1_R*/] = 0;
+	notestate[13/*FILTER_NOTE_STATE:X2_R*/] = 0;
+	notestate[14/*FILTER_NOTE_STATE:Y1_R*/] = 0;
+	notestate[15/*FILTER_NOTE_STATE:Y2_R*/] = 0;
 );
-effectspec[FX_HEADER#PRE_EXEC_NOTE_FUNCTION] = {note_pre_exec}effect_note_pre_exec_filter;
+effectspec[7/*FX_HEADER:PRE_EXEC_NOTE_FUNCTION*/] = 2/*effect_note_pre_exec_filter*/;
 function effect_note_pre_exec_filter(effect, note, notestate) (
-	notestate[FILTER_NOTE_STATE#LOG_FREQ] = notestate[FILTER_NOTE_STATE#LOG_FREQ_BASE];
-	notestate[FILTER_NOTE_STATE#Q] = notestate[FILTER_NOTE_STATE#Q_BASE];
-	notestate[FILTER_NOTE_STATE#ATTACK_AMOUNT] = notestate[FILTER_NOTE_STATE#ATTACK_AMOUNT_BASE];
-	notestate[FILTER_NOTE_STATE#ATTACK_TIME] = notestate[FILTER_NOTE_STATE#ATTACK_TIME_BASE];
+	notestate[0/*FILTER_NOTE_STATE:LOG_FREQ*/] = notestate[4/*FILTER_NOTE_STATE:LOG_FREQ_BASE*/];
+	notestate[1/*FILTER_NOTE_STATE:Q*/] = notestate[5/*FILTER_NOTE_STATE:Q_BASE*/];
+	notestate[2/*FILTER_NOTE_STATE:ATTACK_AMOUNT*/] = notestate[6/*FILTER_NOTE_STATE:ATTACK_AMOUNT_BASE*/];
+	notestate[3/*FILTER_NOTE_STATE:ATTACK_TIME*/] = notestate[7/*FILTER_NOTE_STATE:ATTACK_TIME_BASE*/];
 );
-effectspec[FX_HEADER#EXEC_NOTE_FUNCTION] = {note_exec}effect_note_exec_filter;
+effectspec[8/*FX_HEADER:EXEC_NOTE_FUNCTION*/] = 2/*effect_note_exec_filter*/;
 function effect_note_exec_filter(effect, note, notestate) local(logfreq, freq, Q, w0, cosW0, alpha, a0, a1, a2, b0, b1, b2, x, y) (
-	logfreq = notestate[FILTER_NOTE_STATE#LOG_FREQ];
-	note[NOTE#SECONDSFROMSTART] < notestate[FILTER_NOTE_STATE#ATTACK_TIME] ? (
-		logfreq += notestate[FILTER_NOTE_STATE#ATTACK_AMOUNT]*(1 - note[NOTE#SECONDSFROMSTART]/notestate[FILTER_NOTE_STATE#ATTACK_TIME]);
+	logfreq = notestate[0/*FILTER_NOTE_STATE:LOG_FREQ*/];
+	note[5/*NOTE:SECONDSFROMSTART*/] < notestate[3/*FILTER_NOTE_STATE:ATTACK_TIME*/] ? (
+		logfreq += notestate[2/*FILTER_NOTE_STATE:ATTACK_AMOUNT*/]*(1 - note[5/*NOTE:SECONDSFROMSTART*/]/notestate[3/*FILTER_NOTE_STATE:ATTACK_TIME*/]);
 	);
 	freq = exp(logfreq);
-	Q = notestate[FILTER_NOTE_STATE#Q];
+	Q = notestate[1/*FILTER_NOTE_STATE:Q*/];
 	Q < 0.1 ? Q = 0.1;
 
 	w0 = 2*$pi*min(0.49, freq/srate);
@@ -676,45 +676,45 @@ function effect_note_exec_filter(effect, note, notestate) local(logfreq, freq, Q
 	b0 = b1/2;
 	b2 = b0;
 	
-	x = note[NOTE#AUDIO_LEFT];
-	y = b0*x + b1*notestate[FILTER_NOTE_STATE#X1_L] + b2*notestate[FILTER_NOTE_STATE#X2_L]
-		- a1*notestate[FILTER_NOTE_STATE#Y1_L] - a2*notestate[FILTER_NOTE_STATE#Y2_L];
-	notestate[FILTER_NOTE_STATE#X2_L] = notestate[FILTER_NOTE_STATE#X1_L];
-	notestate[FILTER_NOTE_STATE#X1_L] = x;
-	notestate[FILTER_NOTE_STATE#Y2_L] = notestate[FILTER_NOTE_STATE#Y1_L];
-	notestate[FILTER_NOTE_STATE#Y1_L] = note[NOTE#AUDIO_LEFT] = y;
+	x = note[6/*NOTE:AUDIO_LEFT*/];
+	y = b0*x + b1*notestate[8/*FILTER_NOTE_STATE:X1_L*/] + b2*notestate[9/*FILTER_NOTE_STATE:X2_L*/]
+		- a1*notestate[10/*FILTER_NOTE_STATE:Y1_L*/] - a2*notestate[11/*FILTER_NOTE_STATE:Y2_L*/];
+	notestate[9/*FILTER_NOTE_STATE:X2_L*/] = notestate[8/*FILTER_NOTE_STATE:X1_L*/];
+	notestate[8/*FILTER_NOTE_STATE:X1_L*/] = x;
+	notestate[11/*FILTER_NOTE_STATE:Y2_L*/] = notestate[10/*FILTER_NOTE_STATE:Y1_L*/];
+	notestate[10/*FILTER_NOTE_STATE:Y1_L*/] = note[6/*NOTE:AUDIO_LEFT*/] = y;
 		
-	x = note[NOTE#AUDIO_RIGHT];
-	y = b0*x + b1*notestate[FILTER_NOTE_STATE#X1_R] + b2*notestate[FILTER_NOTE_STATE#X2_R]
-		- a1*notestate[FILTER_NOTE_STATE#Y1_R] - a2*notestate[FILTER_NOTE_STATE#Y2_R];
-	notestate[FILTER_NOTE_STATE#X2_R] = notestate[FILTER_NOTE_STATE#X1_R];
-	notestate[FILTER_NOTE_STATE#X1_R] = x;
-	notestate[FILTER_NOTE_STATE#Y2_R] = notestate[FILTER_NOTE_STATE#Y1_R];
-	notestate[FILTER_NOTE_STATE#Y1_R] = note[NOTE#AUDIO_RIGHT] = y;
+	x = note[7/*NOTE:AUDIO_RIGHT*/];
+	y = b0*x + b1*notestate[12/*FILTER_NOTE_STATE:X1_R*/] + b2*notestate[13/*FILTER_NOTE_STATE:X2_R*/]
+		- a1*notestate[14/*FILTER_NOTE_STATE:Y1_R*/] - a2*notestate[15/*FILTER_NOTE_STATE:Y2_R*/];
+	notestate[13/*FILTER_NOTE_STATE:X2_R*/] = notestate[12/*FILTER_NOTE_STATE:X1_R*/];
+	notestate[12/*FILTER_NOTE_STATE:X1_R*/] = x;
+	notestate[15/*FILTER_NOTE_STATE:Y2_R*/] = notestate[14/*FILTER_NOTE_STATE:Y1_R*/];
+	notestate[14/*FILTER_NOTE_STATE:Y1_R*/] = note[7/*NOTE:AUDIO_RIGHT*/] = y;
 );
 
 //////////////// Controller Mod ////////////////
 
-CONMOD_NOTE_STATE## > note_fx_statelength ? ui_error("note state too small for controller mod");
-CONMOD_STATE## > fx_list_statelength ? ui_error("effect state too small for controller mod");
-effectspec = fx_spec_start + fx_spec_step*FX_SPECLIST_INDEX#CONMOD(2);
-effectspec[FX_HEADER#NAME] = "Controller/Note/Vel";
-effectspec[FX_HEADER#MODCOUNT] = 0;
+8/*CONMOD_NOTE_STATE: TARGET, MODTYPE, SOURCE, AMOUNT, CURVE_POWER, OFFSET, VALUE, SLEWFACTOR*/ > note_fx_statelength ? ui_error("note state too small for controller mod");
+7/*CONMOD_STATE: AMP*/ > fx_list_statelength ? ui_error("effect state too small for controller mod");
+effectspec = fx_spec_start + fx_spec_step*2/*FX_SPECLIST_INDEX:CONMOD*/;
+effectspec[0/*FX_HEADER:NAME*/] = "Controller/Note/Vel";
+effectspec[1/*FX_HEADER:MODCOUNT*/] = 0;
 
-effectspec[FX_HEADER#FUNC_INIT] = {effect_init}effect_init_conmod;
+effectspec[2/*FX_HEADER:FUNC_INIT*/] = 3/*effect_init_conmod*/;
 function effect_init_conmod(effect) local(state) (
-	effect[FX#NAME] = "Control/Note/Vel Modulator";
+	effect[1/*FX:NAME*/] = "Control/Note/Vel Modulator";
 	
 	state = effect + fx_list_headerlength;
-	state[CONMOD_STATE#MOD_EFFECT(0)] = -1; // Initial target: note itself
-	state[CONMOD_STATE#MOD_INDEX(1)] = 0; // Frequency
+	state[0/*CONMOD_STATE:MOD_EFFECT*/] = -1; // Initial target: note itself
+	state[1/*CONMOD_STATE:MOD_INDEX*/] = 0; // Frequency
 	
-	state[CONMOD_STATE#SOURCE(2)] = -1; // -2 is note, -1 is velocity
-	state[CONMOD_STATE#AMOUNT(3)] = 0.015;
-	state[CONMOD_STATE#ZERO_POINT(4)] = 0.5;
-	state[CONMOD_STATE#CURVE(5)] = 0;
+	state[2/*CONMOD_STATE:SOURCE*/] = -1; // -2 is note, -1 is velocity
+	state[3/*CONMOD_STATE:AMOUNT*/] = 0.015;
+	state[4/*CONMOD_STATE:ZERO_POINT*/] = 0.5;
+	state[5/*CONMOD_STATE:CURVE*/] = 0;
 );
-effectspec[FX_HEADER#CONFIG_UI_FUNCTION] = {config_ui}effect_ui_conmod;
+effectspec[3/*FX_HEADER:CONFIG_UI_FUNCTION*/] = 3/*effect_ui_conmod*/;
 function effect_conmod_curve(value, zero_point, curve) local(curvepower) (
 	curvepower = exp(curve);
 	pow(value, curvepower) - pow(zero_point, curvepower);
@@ -723,7 +723,7 @@ function effect_ui_conmod(effect) local(state, effect_index, mod_range, source, 
 	effect_index = (effect - fx_list_start)/fx_list_step;
 	state = effect + fx_list_headerlength;
 
-	mod_range = get_mod_range(state[CONMOD_STATE#MOD_EFFECT], state[CONMOD_STATE#MOD_INDEX]);
+	mod_range = get_mod_range(state[0/*CONMOD_STATE:MOD_EFFECT*/], state[1/*CONMOD_STATE:MOD_INDEX*/]);
 	ui_split_topratio(1/6);
 		ui_push_heighttext(-1);
 			ui_split_leftratio(0.2);
@@ -734,7 +734,7 @@ function effect_ui_conmod(effect) local(state, effect_index, mod_range, source, 
 			ui_split_rightratio(0.2);
 			ui_pop();
 
-			source = state[CONMOD_STATE#SOURCE];
+			source = state[2/*CONMOD_STATE:SOURCE*/];
 			source_prev = -2;
 			source_next = source;
 			i = -2;
@@ -753,7 +753,7 @@ function effect_ui_conmod(effect) local(state, effect_index, mod_range, source, 
 				i += 1;
 			);
 			ui_align(0, -1);
-			state[CONMOD_STATE#SOURCE] = control_selector(source, source_name, source_next, source_prev);
+			state[2/*CONMOD_STATE:SOURCE*/] = control_selector(source, source_name, source_next, source_prev);
 		ui_pop();
 	ui_split_next();
 		ui_push_heighttext(-1);
@@ -765,9 +765,9 @@ function effect_ui_conmod(effect) local(state, effect_index, mod_range, source, 
 			ui_split_rightratio(0.2);
 				ui_padleft();
 				ui_align(0, -1);
-				ui_textnumber(floor(state[CONMOD_STATE#AMOUNT]*100/mod_range + 0.5), "%i%%");
+				ui_textnumber(floor(state[3/*CONMOD_STATE:AMOUNT*/]*100/mod_range + 0.5), "%i%%");
 			ui_pop();
-			state[CONMOD_STATE#AMOUNT] = control_hslider(state[CONMOD_STATE#AMOUNT], 0, mod_range*2, 3);
+			state[3/*CONMOD_STATE:AMOUNT*/] = control_hslider(state[3/*CONMOD_STATE:AMOUNT*/], 0, mod_range*2, 3);
 		ui_pop();
 	ui_split_next();
 		ui_push_heighttext(-1);
@@ -779,9 +779,9 @@ function effect_ui_conmod(effect) local(state, effect_index, mod_range, source, 
 			ui_split_rightratio(0.2);
 				ui_padleft();
 				ui_align(0, -1);
-				ui_textnumber(state[CONMOD_STATE#ZERO_POINT]*127, "%i");
+				ui_textnumber(state[4/*CONMOD_STATE:ZERO_POINT*/]*127, "%i");
 			ui_pop();
-			state[CONMOD_STATE#ZERO_POINT] = control_hslider(state[CONMOD_STATE#ZERO_POINT], 0, 1, 0);
+			state[4/*CONMOD_STATE:ZERO_POINT*/] = control_hslider(state[4/*CONMOD_STATE:ZERO_POINT*/], 0, 1, 0);
 		ui_pop();
 	ui_split_next();
 		ui_push_heighttext(-1);
@@ -792,7 +792,7 @@ function effect_ui_conmod(effect) local(state, effect_index, mod_range, source, 
 			ui_pop();
 			ui_split_rightratio(0.2);
 			ui_pop();
-			state[CONMOD_STATE#CURVE] = control_hslider(state[CONMOD_STATE#CURVE], -2, 2, 0);
+			state[5/*CONMOD_STATE:CURVE*/] = control_hslider(state[5/*CONMOD_STATE:CURVE*/], -2, 2, 0);
 		ui_pop();
 	ui_split_next();
 		ui_push_heighttext(-1);
@@ -806,17 +806,17 @@ function effect_ui_conmod(effect) local(state, effect_index, mod_range, source, 
 				ui_padright();
 				control_button("edit") ? (
 					ui_screen_open("automation-target");
-					ui_screen_set(0, state + CONMOD_STATE#MOD_EFFECT);
-					ui_screen_set(1, state + CONMOD_STATE#MOD_INDEX);
-					ui_screen_set(2, state + CONMOD_STATE#AMOUNT);
+					ui_screen_set(0, state + 0/*CONMOD_STATE:MOD_EFFECT*/);
+					ui_screen_set(1, state + 1/*CONMOD_STATE:MOD_INDEX*/);
+					ui_screen_set(2, state + 3/*CONMOD_STATE:AMOUNT*/);
 					ui_screen_set(3, effect_index);
 				);
 			ui_pop();
 			ui_split_leftratio(0.6);
 				ui_padright();
-				control_readout(get_effect_name(state[CONMOD_STATE#MOD_EFFECT]));
+				control_readout(get_effect_name(state[0/*CONMOD_STATE:MOD_EFFECT*/]));
 			ui_split_next();
-				control_readout(get_mod_name(state[CONMOD_STATE#MOD_EFFECT], state[CONMOD_STATE#MOD_INDEX]));
+				control_readout(get_mod_name(state[0/*CONMOD_STATE:MOD_EFFECT*/], state[1/*CONMOD_STATE:MOD_INDEX*/]));
 			ui_pop();
 		ui_pop();
 	ui_pop();
@@ -830,7 +830,7 @@ function effect_ui_conmod(effect) local(state, effect_index, mod_range, source, 
 	gfx_x = ui_left();
 	i = 0;
 	while (i <= 127) (
-		value = effect_conmod_curve(i/127, state[CONMOD_STATE#ZERO_POINT], state[CONMOD_STATE#CURVE]);
+		value = effect_conmod_curve(i/127, state[4/*CONMOD_STATE:ZERO_POINT*/], state[5/*CONMOD_STATE:CURVE*/]);
 		y = ui_bottom() - ui_height()*(1 + value)/2;
 		i > 0 ? (
 			gfx_lineto(ui_left() + ui_width()*i/127, y, 1);
@@ -844,59 +844,59 @@ function effect_ui_conmod(effect) local(state, effect_index, mod_range, source, 
 	ui_border();
 	control_finish_enabled(1);
 );
-effectspec[FX_HEADER#CONFIG_SWAP_FUNCTION] = {config_swap}effect_swap_conmod;
+effectspec[4/*FX_HEADER:CONFIG_SWAP_FUNCTION*/] = 2/*effect_swap_conmod*/;
 function effect_swap_conmod(effect, fxIndex1, fxIndex2) (
 	state = effect + fx_list_headerlength;
 
-	state[CONMOD_STATE#MOD_EFFECT] == fxIndex1 ? (
-		state[CONMOD_STATE#MOD_EFFECT] = fxIndex2;
-	) : state[CONMOD_STATE#MOD_EFFECT] == fxIndex2 ? (
-		state[CONMOD_STATE#MOD_EFFECT] = fxIndex1;
+	state[0/*CONMOD_STATE:MOD_EFFECT*/] == fxIndex1 ? (
+		state[0/*CONMOD_STATE:MOD_EFFECT*/] = fxIndex2;
+	) : state[0/*CONMOD_STATE:MOD_EFFECT*/] == fxIndex2 ? (
+		state[0/*CONMOD_STATE:MOD_EFFECT*/] = fxIndex1;
 	);
 );
-effectspec[FX_HEADER#CONFIG_DELETE_FUNCTION] = {config_delete}effect_delete_conmod;
+effectspec[5/*FX_HEADER:CONFIG_DELETE_FUNCTION*/] = 2/*effect_delete_conmod*/;
 function effect_delete_conmod(effect, fxIndex) (
 	state = effect + fx_list_headerlength;
 
-	state[CONMOD_STATE#MOD_EFFECT] == fxIndex ? (
+	state[0/*CONMOD_STATE:MOD_EFFECT*/] == fxIndex ? (
 		// Our target was just deleted - reset the effect
 		effect_init_conmod(effect);
 		// Amplitude to zero
-		state[CONMOD_STATE#AMP] = 0;
+		state[6/*CONMOD_STATE:AMP*/] = 0;
 	);
 );
-effectspec[FX_HEADER#SETUP_NOTE_FUNCTION] = {note_setup}effect_note_setup_conmod;
+effectspec[6/*FX_HEADER:SETUP_NOTE_FUNCTION*/] = 3/*effect_note_setup_conmod*/;
 function effect_note_setup_conmod(effect, note, notestate) local(state) (
 	state = effect + fx_list_headerlength;
 	
 	// Use the remainder for private state
-	notestate[CONMOD_NOTE_STATE#TARGET] = get_mod_index(state[CONMOD_STATE#MOD_EFFECT], state[CONMOD_STATE#MOD_INDEX]);
-	notestate[CONMOD_NOTE_STATE#MODTYPE] = get_mod_type(state[CONMOD_STATE#MOD_EFFECT],
-	state[CONMOD_STATE#MOD_INDEX]);
+	notestate[0/*CONMOD_NOTE_STATE:TARGET*/] = get_mod_index(state[0/*CONMOD_STATE:MOD_EFFECT*/], state[1/*CONMOD_STATE:MOD_INDEX*/]);
+	notestate[1/*CONMOD_NOTE_STATE:MODTYPE*/] = get_mod_type(state[0/*CONMOD_STATE:MOD_EFFECT*/],
+	state[1/*CONMOD_STATE:MOD_INDEX*/]);
 	
-	notestate[CONMOD_NOTE_STATE#SOURCE] = state[CONMOD_STATE#SOURCE];
-	notestate[CONMOD_NOTE_STATE#AMOUNT] = state[CONMOD_STATE#AMOUNT];
+	notestate[2/*CONMOD_NOTE_STATE:SOURCE*/] = state[2/*CONMOD_STATE:SOURCE*/];
+	notestate[3/*CONMOD_NOTE_STATE:AMOUNT*/] = state[3/*CONMOD_STATE:AMOUNT*/];
 
-	notestate[CONMOD_NOTE_STATE#CURVE_POWER] = exp(state[CONMOD_STATE#CURVE]);
-	notestate[CONMOD_NOTE_STATE#OFFSET] = pow(state[CONMOD_STATE#ZERO_POINT], notestate[CONMOD_NOTE_STATE#CURVE_POWER]);
+	notestate[4/*CONMOD_NOTE_STATE:CURVE_POWER*/] = exp(state[5/*CONMOD_STATE:CURVE*/]);
+	notestate[5/*CONMOD_NOTE_STATE:OFFSET*/] = pow(state[4/*CONMOD_STATE:ZERO_POINT*/], notestate[4/*CONMOD_NOTE_STATE:CURVE_POWER*/]);
 	
-	notestate[CONMOD_NOTE_STATE#VALUE] = -1;
-	notestate[CONMOD_NOTE_STATE#SLEWFACTOR] = 1/0.005/srate;
+	notestate[6/*CONMOD_NOTE_STATE:VALUE*/] = -1;
+	notestate[7/*CONMOD_NOTE_STATE:SLEWFACTOR*/] = 1/0.005/srate;
 );
-effectspec[FX_HEADER#PRE_EXEC_NOTE_FUNCTION] = 0;
-effectspec[FX_HEADER#EXEC_NOTE_FUNCTION] = {note_exec}effect_note_exec_conmod;
+effectspec[7/*FX_HEADER:PRE_EXEC_NOTE_FUNCTION*/] = 0;
+effectspec[8/*FX_HEADER:EXEC_NOTE_FUNCTION*/] = 3/*effect_note_exec_conmod*/;
 function effect_note_exec_conmod(effect, note, notestate) local(source, value, targetIndex) (
-	targetIndex = notestate[CONMOD_NOTE_STATE#TARGET];
-	source = notestate[CONMOD_NOTE_STATE#SOURCE];
+	targetIndex = notestate[0/*CONMOD_NOTE_STATE:TARGET*/];
+	source = notestate[2/*CONMOD_NOTE_STATE:SOURCE*/];
 	targetIndex >= 0 ? (
-		value = (source == -1) ? note[NOTE#VEL]/127 : (source == -2) ? note[NOTE#NOTE]/127 : controller_values[source];
-		value = notestate[CONMOD_NOTE_STATE#AMOUNT]*2*(pow(value, notestate[CONMOD_NOTE_STATE#CURVE_POWER]) - notestate[CONMOD_NOTE_STATE#OFFSET]);
-		notestate[CONMOD_NOTE_STATE#VALUE] < 0 ? (
-			notestate[CONMOD_NOTE_STATE#VALUE] = value;
+		value = (source == -1) ? note[3/*NOTE:VEL*/]/127 : (source == -2) ? note[4/*NOTE:NOTE*/]/127 : controller_values[source];
+		value = notestate[3/*CONMOD_NOTE_STATE:AMOUNT*/]*2*(pow(value, notestate[4/*CONMOD_NOTE_STATE:CURVE_POWER*/]) - notestate[5/*CONMOD_NOTE_STATE:OFFSET*/]);
+		notestate[6/*CONMOD_NOTE_STATE:VALUE*/] < 0 ? (
+			notestate[6/*CONMOD_NOTE_STATE:VALUE*/] = value;
 		) : (
-			value = notestate[CONMOD_NOTE_STATE#VALUE] = notestate[CONMOD_NOTE_STATE#VALUE] + (value - notestate[CONMOD_NOTE_STATE#VALUE])*notestate[CONMOD_NOTE_STATE#SLEWFACTOR];
+			value = notestate[6/*CONMOD_NOTE_STATE:VALUE*/] = notestate[6/*CONMOD_NOTE_STATE:VALUE*/] + (value - notestate[6/*CONMOD_NOTE_STATE:VALUE*/])*notestate[7/*CONMOD_NOTE_STATE:SLEWFACTOR*/];
 		);
-		notestate[CONMOD_NOTE_STATE#MODTYPE] == FX_MODTYPE#ADD ? (
+		notestate[1/*CONMOD_NOTE_STATE:MODTYPE*/] == 0/*FX_MODTYPE:ADD*/ ? (
 			note[targetIndex] += value;
 		) : (
 			note[targetIndex] *= max(0, 1 + value);
@@ -906,13 +906,52 @@ function effect_note_exec_conmod(effect, note, notestate) local(source, value, t
 
 //////////////// Effect Manipulation ////////////////
 
-function {effect_init}(effect_slot);
-function {config_ui}(effect);
-function {config_swap}(effect, index1, index2);
-function {config_delete}(effect, index);
-function {note_setup}(effect, note, notestate);
-function {note_exec}(effect, note, notestate);
-function {note_pre_exec}(effect, note, notestate);
+function effect_init(function_id, effect_slot) (
+	function_id ? (
+		function_id == 1 ? effect_init_lfo(effect_slot)
+		: function_id == 2 ? effect_init_filter(effect_slot)
+		: function_id == 3 ? effect_init_conmod(effect_slot)
+	);
+);;
+function config_ui(function_id, effect) (
+	function_id ? (
+		function_id == 1 ? effect_ui_lfo(effect)
+		: function_id == 2 ? effect_ui_filter(effect)
+		: function_id == 3 ? effect_ui_conmod(effect)
+	);
+);;
+function config_swap(function_id, effect, index1, index2) (
+	function_id ? (
+		function_id == 1 ? effect_swap_lfo(effect, index1, index2)
+		: function_id == 2 ? effect_swap_conmod(effect, index1, index2)
+	);
+);;
+function config_delete(function_id, effect, index) (
+	function_id ? (
+		function_id == 1 ? effect_delete_lfo(effect, index)
+		: function_id == 2 ? effect_delete_conmod(effect, index)
+	);
+);;
+function note_setup(function_id, effect, note, notestate) (
+	function_id ? (
+		function_id == 1 ? effect_note_setup_lfo(effect, note, notestate)
+		: function_id == 2 ? effect_note_setup_filter(effect, note, notestate)
+		: function_id == 3 ? effect_note_setup_conmod(effect, note, notestate)
+	);
+);;
+function note_exec(function_id, effect, note, notestate) (
+	function_id ? (
+		function_id == 1 ? effect_note_exec_lfo(effect, note, notestate)
+		: function_id == 2 ? effect_note_exec_filter(effect, note, notestate)
+		: function_id == 3 ? effect_note_exec_conmod(effect, note, notestate)
+	);
+);;
+function note_pre_exec(function_id, effect, note, notestate) (
+	function_id ? (
+		function_id == 1 ? effect_note_pre_exec_lfo(effect, note, notestate)
+		: function_id == 2 ? effect_note_pre_exec_filter(effect, note, notestate)
+	);
+);;
 
 function append_effect(index) local(spec, effect, effect_name) (
 	fx_list_count < fx_list_maxcount ? (
@@ -920,14 +959,14 @@ function append_effect(index) local(spec, effect, effect_name) (
 		effect = fx_list_start + fx_list_step*fx_list_count;
 		effect_name = string_fx_names_start + fx_list_count;
 		spec = fx_spec_start + fx_spec_step*index;
-		{effect_init:spec[FX_HEADER#FUNC_INIT]}(effect);
-		effect[FX#SPEC_INDEX] = index;
+		effect_init(spec[2/*FX_HEADER:FUNC_INIT*/], effect);
+		effect[0/*FX:SPEC_INDEX*/] = index;
 	
 
 		// Make sure effect is using the correct mutable string slot
-		effect[FX#NAME] != effect_name ? (
-			strcpy(effect_name, effect[FX#NAME]);
-			effect[FX#NAME] = effect_name;
+		effect[1/*FX:NAME*/] != effect_name ? (
+			strcpy(effect_name, effect[1/*FX:NAME*/]);
+			effect[1/*FX:NAME*/] = effect_name;
 		);
 		
 		clear_all_notes();
@@ -941,13 +980,13 @@ function effect_swap(fxIndex1, fxIndex2) local(note, i, tmp, effect, effect2, sp
 	// Swap the headers (copy the string values, don't swap references)
 	effect = fx_list_start + fx_list_step*fxIndex1;
 	effect2 = fx_list_start + fx_list_step*fxIndex2;
-	strcpy(#effect_swap_tmp, effect[FX#NAME]);
-	strcpy(effect[FX#NAME], effect2[FX#NAME]);
-	strcpy(effect2[FX#NAME], #effect_swap_tmp);
+	strcpy(#effect_swap_tmp, effect[1/*FX:NAME*/]);
+	strcpy(effect[1/*FX:NAME*/], effect2[1/*FX:NAME*/]);
+	strcpy(effect2[1/*FX:NAME*/], #effect_swap_tmp);
 	
-	tmp = effect[FX#SPEC_INDEX];
-	effect[FX#SPEC_INDEX] = effect2[FX#SPEC_INDEX];
-	effect2[FX#SPEC_INDEX] = tmp;
+	tmp = effect[0/*FX:SPEC_INDEX*/];
+	effect[0/*FX:SPEC_INDEX*/] = effect2[0/*FX:SPEC_INDEX*/];
+	effect2[0/*FX:SPEC_INDEX*/] = tmp;
 	
 	// Swap the states
 	i = 0;
@@ -961,8 +1000,8 @@ function effect_swap(fxIndex1, fxIndex2) local(note, i, tmp, effect, effect2, sp
 	i = 0;
 	while (i < fx_list_count) (
 		effect = fx_list_start + fx_list_step*i;
-		spec = fx_spec_start + fx_spec_step*effect[FX#SPEC_INDEX];
-		{config_swap:spec[FX_HEADER#CONFIG_SWAP_FUNCTION]}(effect, fxIndex1, fxIndex2);
+		spec = fx_spec_start + fx_spec_step*effect[0/*FX:SPEC_INDEX*/];
+		config_swap(spec[4/*FX_HEADER:CONFIG_SWAP_FUNCTION*/], effect, fxIndex1, fxIndex2);
 		i += 1;
 	);
 	
@@ -980,8 +1019,8 @@ function effect_delete(fxIndex) local(i, effect, spec) (
 		i = 0;
 		while (i < fx_list_count) (
 			effect = fx_list_start + fx_list_step*i;
-			spec = fx_spec_start + fx_spec_step*effect[FX#SPEC_INDEX];
-			{config_delete:spec[FX_HEADER#CONFIG_DELETE_FUNCTION]}(effect, fx_list_count);
+			spec = fx_spec_start + fx_spec_step*effect[0/*FX:SPEC_INDEX*/];
+			config_delete(spec[5/*FX_HEADER:CONFIG_DELETE_FUNCTION*/], effect, fx_list_count);
 			i += 1;
 		);
 	) : (
@@ -1112,7 +1151,7 @@ recompute_index < wavetables_count ? (
 
 		// Place in wavetable
 		wavetable = wavetables_start + wavetable_step*wavetable_index;
-		wavetable[WAVETABLE#FREQ] = base_freq*srate/wavetable_refsrate;
+		wavetable[0/*WAVETABLE:FREQ*/] = base_freq*srate/wavetable_refsrate;
 		wavetable_samples = wavetable + wavetable_headerlength;
 		assignedwavetable = wavetable;
 		i = 0;
@@ -1139,42 +1178,42 @@ while (midirecv(midi_offset, midi_msg1, midi_msg23)) (
 	(midi_type == $x9 && midi_msg3 != 0) ? (
 		// Note on
 		note = notes_start;
-		while (note[NOTE#ACTIVE] && note < notes_end) (
-			options_forceduplicaterelease && (note[NOTE#NOTE] == midi_msg2) ? (
+		while (note[2/*NOTE:ACTIVE*/] && note < notes_end) (
+			options_forceduplicaterelease && (note[4/*NOTE:NOTE*/] == midi_msg2) ? (
 				// Force release of duplicate notes
-				note[NOTE#SECONDSFROMEND] = max(note[NOTE#SECONDSFROMEND], -midi_offset*invsrate);
-				note[NOTE#DECAYRATE] = 1;
+				note[8/*NOTE:SECONDSFROMEND*/] = max(note[8/*NOTE:SECONDSFROMEND*/], -midi_offset*invsrate);
+				note[9/*NOTE:DECAYRATE*/] = 1;
 			);
 			note += notes_step;
 		);
 		// Found a free slot
 		note < notes_end ? (
 			// Note parameters
-			note[NOTE#ACTIVE] = 1;
-			note[NOTE#CHANNEL] = midi_channel;
-			note[NOTE#NOTE] = midi_msg2;
-			note[NOTE#VEL] = midi_msg3;
-			note[NOTE#SECONDSFROMSTART] = -midi_offset*invsrate;
-			note[NOTE#SECONDSFROMEND] = -note_maxduration - midi_offset*invsrate;
-			note[NOTE#DECAYRATE] = 0;
-			note[NOTE#LOG_FREQ_BASE] = log(440*pow(2, (note[NOTE#NOTE] - 69)/12));
-			note[NOTE#AMP_BASE] = volume*note[NOTE#VEL]/127;
+			note[2/*NOTE:ACTIVE*/] = 1;
+			note[10/*NOTE:CHANNEL*/] = midi_channel;
+			note[4/*NOTE:NOTE*/] = midi_msg2;
+			note[3/*NOTE:VEL*/] = midi_msg3;
+			note[5/*NOTE:SECONDSFROMSTART*/] = -midi_offset*invsrate;
+			note[8/*NOTE:SECONDSFROMEND*/] = -note_maxduration - midi_offset*invsrate;
+			note[9/*NOTE:DECAYRATE*/] = 0;
+			note[11/*NOTE:LOG_FREQ_BASE*/] = log(440*pow(2, (note[4/*NOTE:NOTE*/] - 69)/12));
+			note[12/*NOTE:AMP_BASE*/] = volume*note[3/*NOTE:VEL*/]/127;
 			
 			// Wavetable params
-			wavetable_index = (note[NOTE#LOG_FREQ_BASE] - log(wavetable_low))/log(wavetable_high/wavetable_low)*wavetables_count;
+			wavetable_index = (note[11/*NOTE:LOG_FREQ_BASE*/] - log(wavetable_low))/log(wavetable_high/wavetable_low)*wavetables_count;
 			wavetable_index = min(wavetables_count - 1, max(0, floor(wavetable_index)));
-			note[NOTE#WAVEINDEX] = wavetable_index; // Wavetable #0
-			note[NOTE#SAMPLEPOS] = rand(wavetable_sampleslength);
+			note[13/*NOTE:WAVEINDEX*/] = wavetable_index; // Wavetable #0
+			note[14/*NOTE:SAMPLEPOS*/] = rand(wavetable_sampleslength);
 			display_wavetable_index = wavetable_index;
 			
 			// FX note setup
 			i = 0;
 			i < fx_list_count ? while (
 				effect = fx_list_start + i*fx_list_step;
-				spec = fx_spec_start + fx_spec_step*effect[FX#SPEC_INDEX];
+				spec = fx_spec_start + fx_spec_step*effect[0/*FX:SPEC_INDEX*/];
 				notestate = note + note_headerlength + note_fx_statelength*i;
 
-				{note_setup:spec[FX_HEADER#SETUP_NOTE_FUNCTION]}(effect, note, notestate);
+				note_setup(spec[6/*FX_HEADER:SETUP_NOTE_FUNCTION*/], effect, note, notestate);
 
 				i += 1;
 				i < fx_list_count;
@@ -1184,8 +1223,8 @@ while (midirecv(midi_offset, midi_msg1, midi_msg23)) (
 		// Note off 
 		note = notes_start;
 		while (
-			note[NOTE#ACTIVE] && note[NOTE#CHANNEL] == midi_channel && note[NOTE#NOTE] == midi_msg2 ? (
-				note[NOTE#SECONDSFROMEND] = max(note[NOTE#SECONDSFROMEND], -midi_offset*invsrate);
+			note[2/*NOTE:ACTIVE*/] && note[10/*NOTE:CHANNEL*/] == midi_channel && note[4/*NOTE:NOTE*/] == midi_msg2 ? (
+				note[8/*NOTE:SECONDSFROMEND*/] = max(note[8/*NOTE:SECONDSFROMEND*/], -midi_offset*invsrate);
 			);
 			note += notes_step;
 			note < notes_end;
@@ -1196,8 +1235,8 @@ while (midirecv(midi_offset, midi_msg1, midi_msg23)) (
 		) : midi_msg == 123 ? (
 			note = notes_start;
 			while (note < notes_end) (
-				note[NOTE#ACTIVE] ? (
-					note[NOTE#SECONDSFROMEND] = 0;
+				note[2/*NOTE:ACTIVE*/] ? (
+					note[8/*NOTE:SECONDSFROMEND*/] = 0;
 				);
 				note += note_step;
 			);
@@ -1213,7 +1252,7 @@ polyphony_current = 0;
 note = notes_start;
 note_active_end = notes_start;
 while (
-	note[NOTE#ACTIVE] ? (
+	note[2/*NOTE:ACTIVE*/] ? (
 		polyphony_current += 1;
 		note_active_end = note + notes_step;
 	);
@@ -1227,28 +1266,28 @@ while (
 
 note = notes_start;
 while (
-	note[NOTE#ACTIVE] ? (
-		note[NOTE#SECONDSFROMSTART] > 0 ? (
-			secondsFromStart = note[NOTE#SECONDSFROMSTART];
-			secondsFromEnd = note[NOTE#SECONDSFROMEND];
-			note[NOTE#LOG_FREQ] = note[NOTE#LOG_FREQ_BASE];
-			note[NOTE#AMP] = note[NOTE#AMP_BASE];
+	note[2/*NOTE:ACTIVE*/] ? (
+		note[5/*NOTE:SECONDSFROMSTART*/] > 0 ? (
+			secondsFromStart = note[5/*NOTE:SECONDSFROMSTART*/];
+			secondsFromEnd = note[8/*NOTE:SECONDSFROMEND*/];
+			note[0/*NOTE:LOG_FREQ*/] = note[11/*NOTE:LOG_FREQ_BASE*/];
+			note[1/*NOTE:AMP*/] = note[12/*NOTE:AMP_BASE*/];
 
 			// Sample from waveforms
-			wavetable = wavetables_start + note[NOTE#WAVEINDEX]*wavetable_step;
+			wavetable = wavetables_start + note[13/*NOTE:WAVEINDEX*/]*wavetable_step;
 			wavetable_samples = wavetable + wavetable_headerlength;
-			midsample = note[NOTE#SAMPLEPOS];
+			midsample = note[14/*NOTE:SAMPLEPOS*/];
 			lowsample = floor(midsample);
 			highsample = ceil(midsample)%wavetable_sampleslength;
 			ratio = (midsample - lowsample);
 
 			lowvalue = wavetable_samples[2*lowsample];
 			highvalue = wavetable_samples[2*highsample];
-			note[NOTE#AUDIO_LEFT] = lowvalue + (highvalue - lowvalue)*ratio;
+			note[6/*NOTE:AUDIO_LEFT*/] = lowvalue + (highvalue - lowvalue)*ratio;
 
 			lowvalue = wavetable_samples[2*lowsample + 1];
 			highvalue = wavetable_samples[2*highsample + 1];
-			note[NOTE#AUDIO_RIGHT] = lowvalue + (highvalue - lowvalue)*ratio;
+			note[7/*NOTE:AUDIO_RIGHT*/] = lowvalue + (highvalue - lowvalue)*ratio;
 
 			env = 1;
 			stretch = param_env_linear ? 1 : 1;
@@ -1274,64 +1313,64 @@ while (
 			secondsFromEnd > 0 ? (
 				secondsFromEnd > release ? (
 					env = 0;
-					note[NOTE#ACTIVE] = 0;
+					note[2/*NOTE:ACTIVE*/] = 0;
 				) : (
 					env *= param_env_linear
 						? 1 - secondsFromEnd/release
 						: pow(1 - secondsFromEnd/release, 3);
 				);
 			);
-			note[NOTE#ENV] = env;
+			note[15/*NOTE:ENV*/] = env;
 			
 			// FX note parameter reset
 			i = 0;
 			while (i < fx_list_count) (
 				effect = fx_list_start + i*fx_list_step;
-				spec = fx_spec_start + fx_spec_step*effect[FX#SPEC_INDEX];
+				spec = fx_spec_start + fx_spec_step*effect[0/*FX:SPEC_INDEX*/];
 				notestate = note + note_headerlength + note_fx_statelength*i;
 
-				{note_pre_exec:spec[FX_HEADER#PRE_EXEC_NOTE_FUNCTION]}(effect, note, notestate);
+				note_pre_exec(spec[7/*FX_HEADER:PRE_EXEC_NOTE_FUNCTION*/], effect, note, notestate);
 				i += 1;
 			);
 			// FX note setup
 			i = 0;
 			while (i < fx_list_count) (
 				effect = fx_list_start + i*fx_list_step;
-				spec = fx_spec_start + fx_spec_step*effect[FX#SPEC_INDEX];
+				spec = fx_spec_start + fx_spec_step*effect[0/*FX:SPEC_INDEX*/];
 				notestate = note + note_headerlength + note_fx_statelength*i;
 
-				{note_exec:spec[FX_HEADER#EXEC_NOTE_FUNCTION]}(effect, note, notestate);
+				note_exec(spec[8/*FX_HEADER:EXEC_NOTE_FUNCTION*/], effect, note, notestate);
 				i += 1;
 			);
 
 			// Increment position using frequency
-			wavetable_freq = wavetable[WAVETABLE#FREQ];
-			freqRatio = exp(note[NOTE#LOG_FREQ])/wavetable_freq;
+			wavetable_freq = wavetable[0/*WAVETABLE:FREQ*/];
+			freqRatio = exp(note[0/*NOTE:LOG_FREQ*/])/wavetable_freq;
 
 			midsample += freqRatio;
 			midsample > wavetable_sampleslength ? while (
 				midsample -= wavetable_sampleslength;
 				midsample > wavetable_sampleslength;
 			);
-			note[NOTE#SAMPLEPOS] = midsample;
+			note[14/*NOTE:SAMPLEPOS*/] = midsample;
 			
-			spl0 += note[NOTE#AUDIO_LEFT]*note[NOTE#AMP]*env;
-			spl1 += note[NOTE#AUDIO_RIGHT]*note[NOTE#AMP]*env;
+			spl0 += note[6/*NOTE:AUDIO_LEFT*/]*note[1/*NOTE:AMP*/]*env;
+			spl1 += note[7/*NOTE:AUDIO_RIGHT*/]*note[1/*NOTE:AMP*/]*env;
 		);
 
-		note[NOTE#SECONDSFROMSTART] += invsrate;
+		note[5/*NOTE:SECONDSFROMSTART*/] += invsrate;
 		secondsFromEnd >= 0 ? (
-			note[NOTE#DECAYRATE] = max(1 - controller_values[64], note[NOTE#DECAYRATE]);
-			note[NOTE#SECONDSFROMEND] += invsrate*note[NOTE#DECAYRATE];
+			note[9/*NOTE:DECAYRATE*/] = max(1 - controller_values[64], note[9/*NOTE:DECAYRATE*/]);
+			note[8/*NOTE:SECONDSFROMEND*/] += invsrate*note[9/*NOTE:DECAYRATE*/];
 		) : (
-			note[NOTE#SECONDSFROMEND] += invsrate;
+			note[8/*NOTE:SECONDSFROMEND*/] += invsrate;
 		);
 	);
 	note += notes_step;
 	note < note_active_end;
 );
 
-@gfx 580 460
+@gfx
 
 //////////////// Graphics ////////////////
 
@@ -1538,7 +1577,7 @@ ui_screen() == "main" ? (
 				ui_text("shape");
 			ui_pop();
 			
-			new_param_waveform_type = control_selector(param_waveform_type, get_waveform_name(param_waveform_type), (param_waveform_type + 1)%WAVEFORM#, (param_waveform_type - 1 + WAVEFORM#)%WAVEFORM#); 
+			new_param_waveform_type = control_selector(param_waveform_type, get_waveform_name(param_waveform_type), (param_waveform_type + 1)%4/*WAVEFORM: */, (param_waveform_type - 1 + 4/*WAVEFORM: */)%4/*WAVEFORM: */); 
 			new_param_waveform_type != param_waveform_type ? (
 				param_waveform_type = new_param_waveform_type;
 				can_recompute = 1;
@@ -1552,7 +1591,7 @@ ui_screen() == "main" ? (
 				ui_text("warp type");
 			ui_pop();
 			
-			new_param_waveform_warptype = control_selector(param_waveform_warptype, get_warptype_name(param_waveform_warptype), (param_waveform_warptype + 1)%WAVEFORM_WARPTYPE#, (param_waveform_warptype - 1 + WAVEFORM_WARPTYPE#)%WAVEFORM_WARPTYPE#); 
+			new_param_waveform_warptype = control_selector(param_waveform_warptype, get_warptype_name(param_waveform_warptype), (param_waveform_warptype + 1)%4/*WAVEFORM_WARPTYPE: */, (param_waveform_warptype - 1 + 4/*WAVEFORM_WARPTYPE: */)%4/*WAVEFORM_WARPTYPE: */); 
 			new_param_waveform_warptype != param_waveform_warptype ? (
 				param_waveform_warptype = new_param_waveform_warptype;
 				can_recompute = 1;
@@ -1700,7 +1739,7 @@ ui_screen() == "main" ? (
 	while (g_effect_index < fx_list_maxcount) (
 		g_effect_index < fx_list_count ? (
 			g_effect = fx_list_start + fx_list_step*g_effect_index;
-			g_effect_spec = fx_spec_start + fx_spec_step*g_effect[FX#SPEC_INDEX];
+			g_effect_spec = fx_spec_start + fx_spec_step*g_effect[0/*FX:SPEC_INDEX*/];
 			ui_color(0, 0, 0);
 			ui_split_rightratio(0.15) ? (
 				control_button("edit") ? (
@@ -1714,7 +1753,7 @@ ui_screen() == "main" ? (
 			// Double-click to edit name
 			ui_click() && ui_clickcount() == 2 ? (
 				ui_screen_open("control.prompt");
-				ui_screen_set(0, g_effect[FX#NAME]);
+				ui_screen_set(0, g_effect[1/*FX:NAME*/]);
 				ui_screen_set(1, "Rename effect");
 			);
 			
@@ -1744,21 +1783,21 @@ ui_screen() == "main" ? (
 				);
 			);
 			
-			strlen(g_effect[FX#NAME]) == 0 ? (
-				strcpy(g_effect[FX#NAME], g_effect_spec[FX_HEADER#NAME]);
+			strlen(g_effect[1/*FX:NAME*/]) == 0 ? (
+				strcpy(g_effect[1/*FX:NAME*/], g_effect_spec[0/*FX_HEADER:NAME*/]);
 			);
 			g_drageffect_index == g_effect_index ? (
 				ui_color(160, 160, 160);
 				ui_fill();
 				ui_color(255, 255, 255);
-				ui_text(g_effect[FX#NAME]);
+				ui_text(g_effect[1/*FX:NAME*/]);
 			) : (
 				(g_effect_index%2) ? (
 					ui_colora(255, 255, 255, 1);
 					ui_fill();
 				);
 				ui_color(0, 0, 0);
-				ui_text(g_effect[FX#NAME]);
+				ui_text(g_effect[1/*FX:NAME*/]);
 			);
 			
 			ui_color(0, 0, 0);
@@ -1814,15 +1853,15 @@ ui_screen() == "main" ? (
 				ui_color(224, 224, 224);
 				ui_fill();
 				ui_color(180, 180, 180);
-				ui_text(g_effect[FX#NAME]);
+				ui_text(g_effect[1/*FX:NAME*/]);
 			) : (
 				ui_hover() ? (
-					control_button(g_effect[FX#NAME]);
+					control_button(g_effect[1/*FX:NAME*/]);
 				) : (
 					ui_color(255, 255, 255);
 					ui_fill();
 					ui_color(0, 0, 0);
-					ui_text(g_effect[FX#NAME]);
+					ui_text(g_effect[1/*FX:NAME*/]);
 					ui_colora(0, 0, 0, 0.1);
 					ui_border_bottom();
 				);
@@ -1850,8 +1889,8 @@ ui_screen() == "main" ? (
 
 	g_effect_index >= 0 ? (
 		g_effect = fx_list_start + fx_list_step*g_effect_index;
-		g_effect_spec = fx_spec_start + fx_spec_step*g_effect[FX#SPEC_INDEX];
-		g_effect_modcount = g_effect_spec[FX_HEADER#MODCOUNT];
+		g_effect_spec = fx_spec_start + fx_spec_step*g_effect[0/*FX:SPEC_INDEX*/];
+		g_effect_modcount = g_effect_spec[1/*FX_HEADER:MODCOUNT*/];
 	) : (
 		g_effect_modcount = 2;
 	);
@@ -1862,7 +1901,7 @@ ui_screen() == "main" ? (
 		while (gi < g_effect_modcount) (
 			g_effect_index >= 0 ? (
 				g_mod_spec = g_effect_spec + fx_spec_headerlength + fx_spec_modlength*gi;
-				g_mod_name = g_mod_spec[FX_MOD#NAME]; 
+				g_mod_name = g_mod_spec[2/*FX_MOD:NAME*/]; 
 			) : (
 				g_mod_name = (gi == 0) ? "Frequency" : "Amplitude";
 			);
@@ -1897,12 +1936,12 @@ ui_screen() == "main" ? (
 		ui_split_top(g_element_height);
 			g_spec = fx_spec_start + fx_spec_step*gi;
 			ui_hover() ? (
-				control_button(g_spec[FX_HEADER#NAME]);
+				control_button(g_spec[0/*FX_HEADER:NAME*/]);
 			) : (
 				ui_color(255, 255, 255);
 				ui_fill();
 				ui_color(0, 0, 0);
-				ui_text(g_spec[FX_HEADER#NAME]);
+				ui_text(g_spec[0/*FX_HEADER:NAME*/]);
 				ui_colora(0, 0, 0, 0.1);
 				ui_border_bottom();
 			);
@@ -1917,15 +1956,15 @@ ui_screen() == "main" ? (
 ) : ui_screen() == "edit-effect" ? (
 	g_effect = ui_screen_get(0);
 	g_effect_index = ui_screen_get(1);
-	g_effect_spec = fx_spec_start + fx_spec_step*g_effect[FX#SPEC_INDEX];
+	g_effect_spec = fx_spec_start + fx_spec_step*g_effect[0/*FX:SPEC_INDEX*/];
 
-	control_navbar(g_effect[FX#NAME], "Delete", 0) == 1 ? (
+	control_navbar(g_effect[1/*FX:NAME*/], "Delete", 0) == 1 ? (
 		ui_screen_open("delete-effect");
 		ui_screen_set(0, g_effect);
 		ui_screen_set(1, g_effect_index);
 	);
-	effect_ui = g_effect_spec[FX_HEADER#CONFIG_UI_FUNCTION];
-	{config_ui:effect_ui}(g_effect);
+	effect_ui = g_effect_spec[3/*FX_HEADER:CONFIG_UI_FUNCTION*/];
+	config_ui(effect_ui, g_effect);
 ) : ui_screen() == "delete-effect" ? (
 	g_effect = ui_screen_get(0);
 	g_effect_index = ui_screen_get(1);
@@ -1988,12 +2027,12 @@ function read_effect() local(read_length, effect, effect_index, spec_index, var_
 		read_length > 0 ? while(
 			file_var(0, var_id);
 			read_length -= 1;
-			var_id == VAR_ID#effect_name(104) ? (
+			var_id == 104/*VAR_ID:effect_name*/ ? (
 				// Point it at the correct mutable string slot
-				effect[FX#NAME] = string_fx_names_start + effect_index;
+				effect[1/*FX:NAME*/] = string_fx_names_start + effect_index;
 				// Read the variable into that slot
-				read_length -= read_string_var(effect[FX#NAME]);
-			) : var_id == VAR_ID#effect_state(105) && effect >= 0 ? (
+				read_length -= read_string_var(effect[1/*FX:NAME*/]);
+			) : var_id == 105/*VAR_ID:effect_state*/ && effect >= 0 ? (
 				file_var(0, var_length);
 				read_length -= var_length + 1;
 				effectstate = effect + fx_list_headerlength;
@@ -2024,29 +2063,29 @@ function read_effect() local(read_length, effect, effect_index, spec_index, var_
 );
 function read_var() local(var_id, i, effect) (
 	file_var(0, var_id);
-	var_id == VAR_ID#param_width_cents(1) ? (
+	var_id == 1/*VAR_ID:param_width_cents*/ ? (
 		param_width_cents = read_plain_var();
-	) : var_id == VAR_ID#param_waveform_type(2) ? (
+	) : var_id == 2/*VAR_ID:param_waveform_type*/ ? (
 		param_waveform_type = read_plain_var();
-	) : var_id == VAR_ID#param_waveform_warptype(6) ? (
+	) : var_id == 6/*VAR_ID:param_waveform_warptype*/ ? (
 		param_waveform_warptype = read_plain_var();
-	) : var_id == VAR_ID#param_waveform_warpamount(3) ? (
+	) : var_id == 3/*VAR_ID:param_waveform_warpamount*/ ? (
 		param_waveform_warpamount = read_plain_var();
-	) : var_id == VAR_ID#param_waveform_mod1strength(4) ? (
+	) : var_id == 4/*VAR_ID:param_waveform_mod1strength*/ ? (
 		param_waveform_mod1strength = read_plain_var();
-	) : var_id == VAR_ID#param_waveform_mod1phase(5) ? (
+	) : var_id == 5/*VAR_ID:param_waveform_mod1phase*/ ? (
 		param_waveform_mod1phase = read_plain_var();
-	) : var_id == VAR_ID#param_env_linear(99) ? (
+	) : var_id == 99/*VAR_ID:param_env_linear*/ ? (
 		param_env_linear = read_plain_var();
-	) : var_id == VAR_ID#param_attack(100) ? (
+	) : var_id == 100/*VAR_ID:param_attack*/ ? (
 		param_attack = read_plain_var();
-	) : var_id == VAR_ID#param_decay(101) ? (
+	) : var_id == 101/*VAR_ID:param_decay*/ ? (
 		param_decay = read_plain_var();
-	) : var_id == VAR_ID#param_sustain(102) ? (
+	) : var_id == 102/*VAR_ID:param_sustain*/ ? (
 		param_sustain = read_plain_var();
-	) : var_id == VAR_ID#param_release(103) ? (
+	) : var_id == 103/*VAR_ID:param_release*/ ? (
 		param_release = read_plain_var();
-	) : var_id == VAR_ID#effect(106) ? (
+	) : var_id == 106/*VAR_ID:effect*/ ? (
 		read_effect();
 	) : (
 		ui_error("Unrecognised variable in state");
@@ -2087,17 +2126,17 @@ function write_effects() local(i, effect, var_id, var_length) (
 	i < fx_list_count ? while(
 		effect = fx_list_start + fx_list_step*i;
 
-		var_id = VAR_ID#effect(106);
+		var_id = 106/*VAR_ID:effect*/;
 		var_length = 1; // Index
-		var_length += 2 + strlen(effect[FX#NAME]);
+		var_length += 2 + strlen(effect[1/*FX:NAME*/]);
 		var_length += 2 + fx_list_statelength;
 		
 		file_var(0, var_id);
 		file_var(0, var_length);
 		
-		file_var(0, effect[FX#SPEC_INDEX]);
-		write_string_var(VAR_ID#effect_name(104), effect[FX#NAME]);
-		write_buffer_var(VAR_ID#effect_state(105), effect + fx_list_headerlength, fx_list_statelength);
+		file_var(0, effect[0/*FX:SPEC_INDEX*/]);
+		write_string_var(104/*VAR_ID:effect_name*/, effect[1/*FX:NAME*/]);
+		write_buffer_var(105/*VAR_ID:effect_state*/, effect + fx_list_headerlength, fx_list_statelength);
 		
 		i += 1;
 		i < fx_list_count;
@@ -2117,16 +2156,16 @@ file_avail(0) >= 0 ? (
 	clear_all_notes();
 	action_recompute = 1;
 ) : (
-	write_plain_var(VAR_ID#param_width_cents(1), param_width_cents);
-	write_plain_var(VAR_ID#param_waveform_type(2), param_waveform_type);
-	write_plain_var(VAR_ID#param_waveform_warptype(6), param_waveform_warptype);
-	write_plain_var(VAR_ID#param_waveform_warpamount(3), param_waveform_warpamount);
-	write_plain_var(VAR_ID#param_waveform_mod1strength(4), param_waveform_mod1strength);
-	write_plain_var(VAR_ID#param_waveform_mod1phase(5), param_waveform_mod1phase);
-	write_plain_var(VAR_ID#param_attack(100), param_attack);
-	write_plain_var(VAR_ID#param_decay(101), param_decay);
-	write_plain_var(VAR_ID#param_sustain(102), param_sustain);
-	write_plain_var(VAR_ID#param_release(103), param_release);
-	write_plain_var(VAR_ID#param_env_linear(99), param_env_linear);
+	write_plain_var(1/*VAR_ID:param_width_cents*/, param_width_cents);
+	write_plain_var(2/*VAR_ID:param_waveform_type*/, param_waveform_type);
+	write_plain_var(6/*VAR_ID:param_waveform_warptype*/, param_waveform_warptype);
+	write_plain_var(3/*VAR_ID:param_waveform_warpamount*/, param_waveform_warpamount);
+	write_plain_var(4/*VAR_ID:param_waveform_mod1strength*/, param_waveform_mod1strength);
+	write_plain_var(5/*VAR_ID:param_waveform_mod1phase*/, param_waveform_mod1phase);
+	write_plain_var(100/*VAR_ID:param_attack*/, param_attack);
+	write_plain_var(101/*VAR_ID:param_decay*/, param_decay);
+	write_plain_var(102/*VAR_ID:param_sustain*/, param_sustain);
+	write_plain_var(103/*VAR_ID:param_release*/, param_release);
+	write_plain_var(99/*VAR_ID:param_env_linear*/, param_env_linear);
 	write_effects();
 );
