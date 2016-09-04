@@ -32,15 +32,16 @@ function functionRefs(source) {
 		var group = functionSwitcherSets[groupName];
 		if (!group) throw new Error('No function group for: ' + funName);
 		var switcherCode = 'function ' + groupName + '(' + ['function_id'].concat(group.argNames).join(', ') + ') (\n';
+		switcherCode += '\tfunction_id ? (\n';
 		group.functions.forEach(function (func, index) {
 			if (index > 0) {
-				switcherCode += '\n\t: ';
+				switcherCode += '\n\t\t: ';
 			} else {
-				switcherCode += '\t';
+				switcherCode += '\t\t';
 			}
 			switcherCode += 'function_id == ' + group.map[func] + ' ? ' + func + '(' + group.argNames.join(', ') + ')';
 		});
-		switcherCode += ';\n)';
+		switcherCode += '\n\t);\n);'
 		return switcherCode;
 	});
 

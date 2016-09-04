@@ -1057,6 +1057,38 @@ function control_border() (
 	ui_pop();
 );
 
+function control_group(text) local(texth, textw, textl, textr, textv) (
+	texth = textw = 0;
+	uix_setgfxfont();
+	gfx_measurestr(text, textw, texth);
+
+	ui_pad2(ui_hpadding()/2, 0);
+	
+	ui_split_top(texth);
+		ui_padleft();
+		ui_split_left(textw + ui_hpadding());
+			textl = ui_left();
+			textr = ui_right();
+			textv = ui_top() + ui_height()/2;
+			ui_align(0.5, 0.5);
+			control_color_border();
+			ui_text(text);
+		ui_pop();
+	ui_pop();
+	ui_padbottom();
+	ui_push();
+		control_color_border();
+		gfx_x = textr;
+		gfx_y = textv;
+		gfx_lineto(ui_right(), gfx_y);
+		gfx_lineto(gfx_x, ui_bottom());
+		gfx_lineto(ui_left(), gfx_y);
+		gfx_lineto(gfx_x, textv);
+		gfx_lineto(textl, gfx_y);
+	ui_pop();
+	ui_pad4(-1, 0, -1, -1);
+);
+
 function control_readout(text) local() (
 	ui_push();
 		// Background color

@@ -361,7 +361,7 @@ function effect_note_exec_lfo(effect, note, notestate) local(angFreq, value, tar
 		notestate[LFO_NOTE_STATE#MODTYPE] == FX_MODTYPE#ADD ? (
 			note[targetIndex] += value;
 		) : (
-			note[targetIndex] *= (1 + value);
+			note[targetIndex] *= max(0, 1 + value);
 		);
 	);
 );
@@ -398,18 +398,22 @@ function effect_init_filter(effect) local(state) (
 	state = effect + fx_list_headerlength;
 	state[FILTER_STATE#FREQ(0)] = 1000;
 	state[FILTER_STATE#Q(1)] = 2;
-	state[FILTER_STATE#ATTACK_AMOUNT(2)] = 1;
+	state[FILTER_STATE#ATTACK_AMOUNT(2)] = 0;
 	state[FILTER_STATE#ATTACK_TIME(3)] = 0.1;
+
+	// Private state
+	state[FILTER_STATE#ATTACK_AMOUNT_VELOCITY] = log(10);
+	state[FILTER_STATE#FREQ_LOG_VELOCITY] = log(5);
+	state[FILTER_STATE#FREQ_LOG_NOTE] = 0.5;
 );
 effectspec[FX_HEADER#CONFIG_UI_FUNCTION] = {config_ui}effect_ui_filter;
 function effect_ui_filter(effect) local(state, effect_index, mod_range) (
 	effect_index = (effect - fx_list_start)/fx_list_step;
 	state = effect + fx_list_headerlength;
 
-	ui_split_topratio(1/2);
-		ui_pad();
-		control_border();
-		ui_split_topratio(1/2);
+	ui_split_topratio(3/5);
+		control_group("Filter");
+		ui_split_topratio(1/4);
 			ui_push_heighttext(-1);
 				ui_split_leftratio(0.2);
 					ui_align(1, -1);
@@ -437,11 +441,52 @@ function effect_ui_filter(effect) local(state, effect_index, mod_range) (
 				ui_pop();
 				state[FILTER_STATE#Q] = control_hslider(state[FILTER_STATE#Q], 0.1, 10, 3);
 			ui_pop();
+		ui_split_next();
+			ui_push_heighttext(-1);
+				ui_split_leftratio(0.2);
+					ui_align(1, -1);
+					ui_padright();
+					ui_text("Velocity");
+				ui_pop();
+				ui_split_rightratio(0.2);
+					ui_padleft();
+					ui_align(0, -1);
+					ui_textnumber(exp(state[FILTER_STATE#FREQ_LOG_VELOCITY]), "x%0.2f");
+				ui_pop();
+				state[FILTER_STATE#FREQ_LOG_VELOCITY] = control_hslider(state[FILTER_STATE#FREQ_LOG_VELOCITY], 0, log(10), -1);
+			ui_pop();
+		ui_split_next();
+			ui_push_heighttext(-1);
+				ui_split_leftratio(0.2);
+					ui_align(1, -1);
+					ui_padright();
+					ui_text("Note");
+				ui_pop();
+				ui_split_rightratio(0.2);
+					ui_padleft();
+					ui_align(0, -1);
+					ui_textnumber(floor(state[FILTER_STATE#FREQ_LOG_NOTE]*100 + 0.5), "%i%%");
+				ui_pop();
+				state[FILTER_STATE#FREQ_LOG_NOTE] = control_hslider(state[FILTER_STATE#FREQ_LOG_NOTE], -1, 2, 0);
+			ui_pop();
 		ui_pop();
 	ui_split_next();
-		ui_pad();
-		control_border();
-		ui_split_topratio(1/2);
+		control_group("Envelope");
+		ui_split_topratio(1/3);
+			ui_push_heighttext(-1);
+				ui_split_leftratio(0.2);
+					ui_align(1, -1);
+					ui_padright();
+					ui_text("Attack");
+				ui_pop();
+				ui_split_rightratio(0.2);
+					ui_padleft();
+					ui_align(0, -1);
+					ui_textnumber(state[FILTER_STATE#ATTACK_TIME]*1000, "%ims");
+				ui_pop();
+				state[FILTER_STATE#ATTACK_TIME] = control_hslider(state[FILTER_STATE#ATTACK_TIME], 0.001, 1.5, 3);
+			ui_pop();
+		ui_split_next();
 			ui_push_heighttext(-1);
 				ui_split_leftratio(0.2);
 					ui_align(1, -1);
@@ -460,14 +505,14 @@ function effect_ui_filter(effect) local(state, effect_index, mod_range) (
 				ui_split_leftratio(0.2);
 					ui_align(1, -1);
 					ui_padright();
-					ui_text("Attack");
+					ui_text("Velocity");
 				ui_pop();
 				ui_split_rightratio(0.2);
 					ui_padleft();
 					ui_align(0, -1);
-					ui_textnumber(state[FILTER_STATE#ATTACK_TIME]*1000, "%ims");
+					ui_textnumber(exp(state[FILTER_STATE#ATTACK_AMOUNT_VELOCITY]), "x%0.2f");
 				ui_pop();
-				state[FILTER_STATE#ATTACK_TIME] = control_hslider(state[FILTER_STATE#ATTACK_TIME], 0.001, 1.5, 3);
+				state[FILTER_STATE#ATTACK_AMOUNT_VELOCITY] = control_hslider(state[FILTER_STATE#ATTACK_AMOUNT_VELOCITY], 0, log(20), -1);
 			ui_pop();
 		ui_pop();
 	ui_pop();
@@ -480,8 +525,11 @@ function effect_note_setup_filter(effect, note, notestate) local(state) (
 
 	// Four modulatable parameters
 	notestate[FILTER_NOTE_STATE#LOG_FREQ_BASE] = log(state[FILTER_STATE#FREQ]);
+	notestate[FILTER_NOTE_STATE#LOG_FREQ_BASE] += state[FILTER_STATE#FREQ_LOG_VELOCITY]*(note[NOTE#VEL] - 64)/127;
+	notestate[FILTER_NOTE_STATE#LOG_FREQ_BASE] += state[FILTER_STATE#FREQ_LOG_NOTE]*(note[NOTE#NOTE] - 64)*log(2)/12;
 	notestate[FILTER_NOTE_STATE#Q_BASE] = state[FILTER_STATE#Q];
 	notestate[FILTER_NOTE_STATE#ATTACK_AMOUNT_BASE] = state[FILTER_STATE#ATTACK_AMOUNT];
+	notestate[FILTER_NOTE_STATE#ATTACK_AMOUNT_BASE] += state[FILTER_STATE#ATTACK_AMOUNT_VELOCITY]*note[NOTE#VEL]/127;
 	notestate[FILTER_NOTE_STATE#ATTACK_TIME_BASE] = state[FILTER_STATE#ATTACK_TIME];
 	
 	// Private state
@@ -560,20 +608,12 @@ function effect_init_conmod(effect) local(state) (
 	state[CONMOD_STATE#SOURCE(2)] = -1; // -2 is note, -1 is velocity
 	state[CONMOD_STATE#AMOUNT(3)] = 0.015;
 	state[CONMOD_STATE#ZERO_POINT(4)] = 0.5;
+	state[CONMOD_STATE#CURVE(5)] = 0;
 );
 effectspec[FX_HEADER#CONFIG_UI_FUNCTION] = {config_ui}effect_ui_conmod;
-function effect_conmod_curve(value, zero_point) (
-	zero_point == 0 ? (
-		1;
-	) : zero_point == 1 ? (
-		-1;
-	) : (
-		debug.zero_point = zero_point;
-		debug.log_zero_point = log(zero_point);
-		debug.value_in = value;
-		debug.result = pow(0, 0.34);
-		2*pow(value, log(0.5)/log(zero_point)) - 1;
-	);
+function effect_conmod_curve(value, zero_point, curve) local(curvepower) (
+	curvepower = exp(curve);
+	pow(value, curvepower) - pow(zero_point, curvepower);
 );
 function effect_ui_conmod(effect) local(state, effect_index, mod_range, source, source_name, name, source_prev, source_next, i, value, y) (
 	effect_index = (effect - fx_list_start)/fx_list_step;
@@ -651,6 +691,17 @@ function effect_ui_conmod(effect) local(state, effect_index, mod_range, source, 
 	ui_split_next();
 		ui_push_heighttext(-1);
 			ui_split_leftratio(0.2);
+				ui_padright();
+				ui_align(1, -1);
+				ui_text("curve");
+			ui_pop();
+			ui_split_rightratio(0.2);
+			ui_pop();
+			state[CONMOD_STATE#CURVE] = control_hslider(state[CONMOD_STATE#CURVE], -2, 2, 0);
+		ui_pop();
+	ui_split_next();
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
 				ui_align(1, -1);
 				ui_padright();
 				ui_text("target");
@@ -684,11 +735,8 @@ function effect_ui_conmod(effect) local(state, effect_index, mod_range, source, 
 	gfx_x = ui_left();
 	i = 0;
 	while (i <= 127) (
-		value = effect_conmod_curve(i/127, state[CONMOD_STATE#ZERO_POINT]);
+		value = effect_conmod_curve(i/127, state[CONMOD_STATE#ZERO_POINT], state[CONMOD_STATE#CURVE]);
 		y = ui_bottom() - ui_height()*(1 + value)/2;
-		debug.value = value;
-		debug.y = y;
-		debug.i = i;
 		i > 0 ? (
 			gfx_lineto(ui_left() + ui_width()*i/127, y, 1);
 		) : (
@@ -696,7 +744,6 @@ function effect_ui_conmod(effect) local(state, effect_index, mod_range, source, 
 		);
 		i += 1;
 	);
-	debug.finish_i = i;
 	
 	ui_color(0, 0, 0);
 	ui_border();
@@ -724,7 +771,7 @@ function effect_delete_conmod(effect, fxIndex) (
 	);
 );
 effectspec[FX_HEADER#SETUP_NOTE_FUNCTION] = {note_setup}effect_note_setup_conmod;
-function effect_note_setup_conmod(effect, note, notestate) local(state, zero_point) (
+function effect_note_setup_conmod(effect, note, notestate) local(state) (
 	state = effect + fx_list_headerlength;
 	
 	// Use the remainder for private state
@@ -735,8 +782,8 @@ function effect_note_setup_conmod(effect, note, notestate) local(state, zero_poi
 	notestate[CONMOD_NOTE_STATE#SOURCE] = state[CONMOD_STATE#SOURCE];
 	notestate[CONMOD_NOTE_STATE#AMOUNT] = state[CONMOD_STATE#AMOUNT];
 
-	zero_point = state[CONMOD_STATE#ZERO_POINT];
-	notestate[CONMOD_NOTE_STATE#CURVE_POWER] = (zero_point == 0) ? 0.0001 : (zero_point == 1) ? 10000 : log(0.5)/log(zero_point);
+	notestate[CONMOD_NOTE_STATE#CURVE_POWER] = exp(state[CONMOD_STATE#CURVE]);
+	notestate[CONMOD_NOTE_STATE#OFFSET] = pow(state[CONMOD_STATE#ZERO_POINT], notestate[CONMOD_NOTE_STATE#CURVE_POWER]);
 );
 effectspec[FX_HEADER#PRE_EXEC_NOTE_FUNCTION] = 0;
 effectspec[FX_HEADER#EXEC_NOTE_FUNCTION] = {note_exec}effect_note_exec_conmod;
@@ -745,11 +792,11 @@ function effect_note_exec_conmod(effect, note, notestate) local(source, value, t
 	source = notestate[CONMOD_NOTE_STATE#SOURCE];
 	targetIndex >= 0 ? (
 		value = (source == -1) ? note[NOTE#VEL]/127 : (source == -2) ? note[NOTE#NOTE]/127 : controller_values[source];
-		value = (2*pow(value, notestate[CONMOD_NOTE_STATE#CURVE_POWER]) - 1)*notestate[CONMOD_NOTE_STATE#AMOUNT];
+		value = notestate[CONMOD_NOTE_STATE#AMOUNT]*2*(pow(value, notestate[CONMOD_NOTE_STATE#CURVE_POWER]) - notestate[CONMOD_NOTE_STATE#OFFSET]);
 		notestate[CONMOD_NOTE_STATE#MODTYPE] == FX_MODTYPE#ADD ? (
 			note[targetIndex] += value;
 		) : (
-			note[targetIndex] *= (1 + value);
+			note[targetIndex] *= max(0, 1 + value);
 		);
 	);
 );
@@ -1231,8 +1278,12 @@ ui_screen() == "main" ? (
 	control_navbar("PadSynth", "About", "about");
 	ui_pad();
 	ui_split_toptext("");
-		ui_split_leftratio(0.5);
-			control_button("Envelope (ADSR)") ? (
+		ui_split_leftratio(1/3);
+			control_button("Waveform") ? (
+				ui_screen_open("waveform");
+			);
+		ui_split_next();
+			control_button("Envelope") ? (
 				ui_screen_open("envelope");
 			);
 		ui_split_next();

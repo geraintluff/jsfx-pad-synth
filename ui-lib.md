@@ -413,6 +413,10 @@ Note that it will still return positive when clicked, even if the button is disa
 
 Displays the text in an inset box.  Useful to indicate values that are variable, but are changed through a different part of the interface (e.g. another screen).
 
+### `control_group(title)`
+
+Displays a bordered section with a title embedded in the border - useful for grouping controls by theme.
+
 ### `control_selector(value, text, up_value, down_value)`
 
 Displays a control with up/down buttons and a text area, to choose between a fixed number of options.  Returns the new value.
@@ -520,6 +524,10 @@ NOTE: the `control_color_*_*()` functions use the current mouse hover/click/drag
 #### `control_border()`
 
 Draws a border around the element.  Used for the outside of interactive controls, but not for internal boundaries.
+
+#### `control_color_border()`
+
+Sets the colour to the control border colour.
 
 #### `control_arrow(direction)`
 
