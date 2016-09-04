@@ -1,0 +1,16 @@
+{
+  "name": "jsfx-padsynth",
+  "version": "1.0.0",
+  "description": "",
+  "main": "pad-synth.js",
+  "dependencies": {
+    "jsfx-preprocessor": "^1.0.0"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "author": "",
+  "license": "ISC",
+  "private": true
+}

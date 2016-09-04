@@ -8,6 +8,8 @@ import ui-lib.jsfx-inc
 
 @init
 
+options_forceduplicaterelease = 1;
+
 //////////////// Setup and Memory Layout ////////////////
 
 // can_recompute = 0;
@@ -17,12 +19,116 @@ recompute_chunk = 1; // Recompute at most one waveform per block, so that we don
 polyphony = 64;
 invsrate = 1/srate;
 
+function get_waveform_name(index) (
+	index == WAVEFORM#SAWTOOTH(0) ? "Sawtooth"
+	: index == WAVEFORM#TRIANGLE(1) ? "Triangle"
+	: index == WAVEFORM#SINE(2) ? "Sine"
+	: index == WAVEFORM#SQUARE(3) ? "Square"
+	: "(???)";
+);
+function get_warptype_name(index) (
+	index == WAVEFORM_WARPTYPE#POWER(0) ? "power"
+	: index == WAVEFORM_WARPTYPE#CLIP(1) ? "clip"
+	: index == WAVEFORM_WARPTYPE#TANH(2) ? "tanh(x)"
+	: index == WAVEFORM_WARPTYPE#SIN(3) ? "sin(x)"
+	: "(???)";
+);
+
+function tanh(x) (
+	x >= 20 ? (
+		1;
+	) : x <= -20 ? (
+		-1;
+	) : (
+		(exp(2*x) - 1)/(exp(2*x) + 1);
+	);
+);
+
+function atanh(x) (
+	x >= 1 ? (
+		100
+	) : x <= -1 ? (
+		-100
+	) : (
+		0.5*log((1 + x)/(1 - x));
+	);
+);
+
+function get_waveform_value(pos) local(value, warpfactor) (
+	param_waveform_mod1strength > 0 ? (
+		pos = (pos + sin(pos*2*$pi + param_waveform_mod1phase)*param_waveform_mod1strength);
+		while (pos > 1) (pos -= 1);
+		while (pos < 0) (pos += 1);
+	);
+
+	param_waveform_type == WAVEFORM#SAWTOOTH ? (
+		value = (pos > 0.5) ? (pos - 1)*2 : 2*pos;
+	) : param_waveform_type == WAVEFORM#TRIANGLE ? (
+		value = pos < 0.25 ? pos*4
+		: pos < 0.75 ? 2 - pos*4
+		: (pos - 1)*4;
+	) : param_waveform_type == WAVEFORM#SINE ? (
+		value = sin(pos*2*$pi);
+	) : param_waveform_type == WAVEFORM#SQUARE ? (
+		value = pos < 0.5 ? -1 : 1;
+	) : 0;
+	
+	param_waveform_warpamount > 0 ? (
+		warpfactor = exp(param_waveform_warpamount);
+		param_waveform_warptype == WAVEFORM_WARPTYPE#SIN ? (
+			value = sin(asin(value)*warpfactor);
+		) : param_waveform_warptype == WAVEFORM_WARPTYPE#CLIP ? (
+			value = max(-1, min(1, value*warpfactor));
+		) : param_waveform_warptype == WAVEFORM_WARPTYPE#POWER ? (
+			value = 2*pow(0.5*value + 0.5, warpfactor) - 1;
+		) : param_waveform_warptype == WAVEFORM_WARPTYPE#TANH ? (
+			value = tanh(atanh(value)*warpfactor);
+		);
+	);
+	value;
+);
+function calculate_waveform_spectrum() local(i, sum, rms) (
+	i = 0;
+	while (i < gen_spectrum_N) (
+		fftblock[i*2] = get_waveform_value(i/gen_spectrum_N);
+		fftblock[i*2 + 1] = 0;
+		i += 1;
+	);
+	fft(fftblock, gen_spectrum_N);
+	fft_permute(fftblock, gen_spectrum_N);
+	rms = 0;
+	i = 1;
+	while (i < gen_spectrum_N) (
+		rms += fftblock[i*2]*fftblock[i*2];
+		rms += fftblock[i*2 + 1]*fftblock[i*2 + 1];
+		i += 1;
+	);
+	rms = sqrt(rms/gen_spectrum_N/2);
+	
+	i = 0;
+	while (i < gen_spectrum_N) (
+		sum = fftblock[i*2]*fftblock[i*2];
+		sum += fftblock[i*2 + 1]*fftblock[i*2 + 1];
+		gen_spectrum[i] = sqrt(sum)/rms;
+		i += 1;
+	);
+);
+function get_waveform_spectrum_amp(n) local(sum) (
+	n >= gen_spectrum_N/2 ? (
+		0;
+	) : (
+		gen_spectrum[n];
+	);
+);
+
 fftblock = 0;
 fftblock_end = 65536;
 
-options_forceduplicaterelease = 1;
+gen_spectrum_N = 1024;
+gen_spectrum = fftblock_end;
+gen_spectrum_end = gen_spectrum + gen_spectrum_N*2;
 
-uiblock_end = ui_setup(fftblock_end);
+uiblock_end = ui_setup(gen_spectrum_end);
 
 // Description of all effects in the system
 fx_spec_start = uiblock_end;
@@ -392,7 +498,6 @@ modspec[FX_MOD#RANGE] = 1;
 
 effectspec[FX_HEADER#FUNC_INIT] = {effect_init}effect_init_filter;
 function effect_init_filter(effect) local(state) (
-	debug.init_filter += 1;
 	effect[FX#NAME] = "Filter";
 	
 	state = effect + fx_list_headerlength;
@@ -453,7 +558,7 @@ function effect_ui_filter(effect) local(state, effect_index, mod_range) (
 					ui_align(0, -1);
 					ui_textnumber(exp(state[FILTER_STATE#FREQ_LOG_VELOCITY]), "x%0.2f");
 				ui_pop();
-				state[FILTER_STATE#FREQ_LOG_VELOCITY] = control_hslider(state[FILTER_STATE#FREQ_LOG_VELOCITY], 0, log(10), -1);
+				state[FILTER_STATE#FREQ_LOG_VELOCITY] = control_hslider(state[FILTER_STATE#FREQ_LOG_VELOCITY], 0, log(20), -1);
 			ui_pop();
 		ui_split_next();
 			ui_push_heighttext(-1);
@@ -549,7 +654,6 @@ function effect_note_pre_exec_filter(effect, note, notestate) (
 	notestate[FILTER_NOTE_STATE#Q] = notestate[FILTER_NOTE_STATE#Q_BASE];
 	notestate[FILTER_NOTE_STATE#ATTACK_AMOUNT] = notestate[FILTER_NOTE_STATE#ATTACK_AMOUNT_BASE];
 	notestate[FILTER_NOTE_STATE#ATTACK_TIME] = notestate[FILTER_NOTE_STATE#ATTACK_TIME_BASE];
-	debug.filter_q = notestate[FILTER_NOTE_STATE#Q];
 );
 effectspec[FX_HEADER#EXEC_NOTE_FUNCTION] = {note_exec}effect_note_exec_filter;
 function effect_note_exec_filter(effect, note, notestate) local(logfreq, freq, Q, w0, cosW0, alpha, a0, a1, a2, b0, b1, b2, x, y) (
@@ -636,27 +740,18 @@ function effect_ui_conmod(effect) local(state, effect_index, mod_range, source, 
 			i = -2;
 			while (i < 128) (
 				name = get_controller_name(i);
-				debug.conmod_i = i;
-				debug.conmod_source = source;
-				debug.conmod_name = name;
 				name >= 0 ? (
 					i == source ? (
-						debug.conmod_source_match += 1;
 						source_name = name;
 					);
 					i < source ? source_prev = i;
 					i > source ? (
-						debug.conmod_finish = i;
 						source_next = i;
 						i = 128;
-						debug.conmod_i2 = i;
-						debug.conmod_next2 = source_next;
 					);
 				);
 				i += 1;
 			);
-			debug.conmod_next = source_next;
-			debug.conmod_prev = source_prev;
 			ui_align(0, -1);
 			state[CONMOD_STATE#SOURCE] = control_selector(source, source_name, source_next, source_prev);
 		ui_pop();
@@ -812,17 +907,11 @@ function {note_exec}(effect, note, notestate);
 function {note_pre_exec}(effect, note, notestate);
 
 function append_effect(index) local(spec, effect, effect_name) (
-	debug.append_effect += 1;
-	debug.append_effect_index = index;
 	fx_list_count < fx_list_maxcount ? (
 		// TODO: check the index is valid, otherwise insert placeholder (negative index)
 		effect = fx_list_start + fx_list_step*fx_list_count;
 		effect_name = string_fx_names_start + fx_list_count;
 		spec = fx_spec_start + fx_spec_step*index;
-		debug.append_effect_spec = spec;
-		debug.fx_spec_start = fx_spec_start;
-		debug.fx_spec_step = fx_spec_step;
-		debug.append_effect_spec_init = spec[FX_HEADER#FUNC_INIT];
 		{effect_init:spec[FX_HEADER#FUNC_INIT]}(effect);
 		effect[FX#SPEC_INDEX] = index;
 	
@@ -896,7 +985,12 @@ function reset_to_defaults() (
 	action_recompute = 1;
 	can_recompute = 1;
 	has_set_parameters = 1;
-	
+
+	param_waveform_type = 0;
+	param_waveform_warptype = 0;
+	param_waveform_warpamount = 0;
+	param_waveform_mod1strength = 0;
+	param_waveform_mod1phase = 0;
 	param_width_cents = 20;
 	param_attack = 0.01;
 	param_decay = 0.3;
@@ -918,10 +1012,17 @@ action_recompute ? (
 	recompute_index = 0;
 );
 
+action_recalculate_spectrum ? (
+	calculate_waveform_spectrum();
+	action_recalculate_spectrum = 0;
+);
+
 recompute_index < wavetables_count ? (
 	param_width = param_width_cents/1200*log(2);
 	wavetable_index = recompute_index;
 	recompute_stop_index = min(wavetables_count, recompute_index + recompute_chunk);
+	
+	calculate_waveform_spectrum();
 	while (
 		ratio = (wavetable_index + 0.5)/wavetables_count;
 		base_freq = exp(log(wavetable_low) + log(wavetable_high/wavetable_low)*ratio);
@@ -942,7 +1043,8 @@ recompute_index < wavetables_count ? (
 			harmonic_freq = base_freq*floor(indexfreq/base_freq/harmonic_range_factor);
 			end_freq = min(wavetable_maxfreq, indexfreq*harmonic_range_factor);
 			while (
-				harmonic_amp = 1/harmonic_freq;
+				harmonic_index = floor(harmonic_freq/base_freq + 0.5);
+				harmonic_amp = get_waveform_spectrum_amp(harmonic_index);
 				harmonic_power = harmonic_amp*harmonic_amp;
 				log_width = max(indexwidth, param_width);
 				hz_width = exp(log_width)*harmonic_freq;
@@ -1098,8 +1200,6 @@ while (midirecv(midi_offset, midi_msg1, midi_msg23)) (
 		);
 	);
 );
-
-debug.controller64 = controller_values[64];
 
 polyphony_current = 0;
 note = notes_start;
@@ -1350,6 +1450,150 @@ ui_screen() == "main" ? (
 			ui_text("by Geraint Luff");
 		ui_pop();
 	ui_pop();
+) : ui_screen() == "waveform" ? (
+	control_navbar("Waveform", -1, -1);
+	ui_pad();
+	ui_split_bottomtext("");
+		ui_split_righttext("Regenerate");
+			control_indicator_button("Regenerate", can_recompute) ? (
+				can_recompute ? action_recompute = 1;
+			);
+		ui_pop();
+	
+		ui_split_lefttext("Width (cents)");
+			ui_text("Width (cents)");
+		ui_pop();
+		ui_split_righttext("200");
+			ui_padleft();
+			ui_align(0, -1);
+			ui_textnumber(param_width_cents + 0.5, "%i");
+		ui_pop();
+
+		new_width_cents = control_hslider(param_width_cents, 5, 200, 3);
+		new_width_cents != param_width_cents ? can_recompute = 1;
+		param_width_cents = new_width_cents;
+	ui_pop();
+	ui_padbottom();
+
+	ui_split_topratio(0.4);
+		ui_split_rightratio(0.5);
+			ui_pad4(ui_hpadding()/2, 0, 0, 0);
+			ui_color(0, 0, 0);
+			ui_fill();
+			ui_color(192, 128, 64);
+			gfx_x = ui_left();
+			gfx_y = ui_top() + (0.5 - get_waveform_value(0)*0.49)*ui_height();
+			while (gfx_x < ui_right() - 1) (
+				g_newx = gfx_x + 1;
+				g_ratio = (g_newx - ui_left())/ui_width();
+				g_newy = ui_top() + (0.5 - get_waveform_value(g_ratio)*0.49)*ui_height();
+				gfx_lineto(g_newx, g_newy, 1);
+			);
+			ui_color(0, 0, 0);
+			ui_border();
+			control_finish_enabled(1);
+		ui_split_next();
+			// Recalculate using current params
+			action_recalculate_spectrum = 1;
+			
+			ui_pad4(0, 0, ui_hpadding()/2, 0);
+			ui_color(0, 0, 0);
+			ui_fill();
+			ui_color(192, 128, 64);
+			
+			g_barwidth = floor(ui_width()/60);
+			g_index = 1;
+			g_left = 1;
+			g_right = g_left + ceil(g_barwidth*0.7);
+
+			while (g_left < ui_width()) (
+				g_amp = get_waveform_spectrum_amp(g_index);
+				g_ratio = max(0, min(1, (4 - log(g_amp))*0.15));
+				gfx_rect(ui_left() + g_left, ui_top() + g_ratio*ui_height(), min(g_right - g_left, ui_width() - g_left), ui_height()*(1 - g_ratio));
+				
+				g_index += 1;
+				g_left += g_barwidth;
+				g_right += g_barwidth;
+			);
+			ui_color(0, 0, 0);
+			ui_border();
+			control_finish_enabled(1);
+		ui_pop();
+	ui_pop();
+
+	control_group("Shape");
+	ui_split_topratio(1/5);
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_pad();
+				ui_align(1, 0.5);
+				ui_text("shape");
+			ui_pop();
+			
+			new_param_waveform_type = control_selector(param_waveform_type, get_waveform_name(param_waveform_type), (param_waveform_type + 1)%WAVEFORM#, (param_waveform_type - 1 + WAVEFORM#)%WAVEFORM#); 
+			new_param_waveform_type != param_waveform_type ? (
+				param_waveform_type = new_param_waveform_type;
+				can_recompute = 1;
+			);
+		ui_pop();
+	ui_split_next();
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_pad();
+				ui_align(1, 0.5);
+				ui_text("warp type");
+			ui_pop();
+			
+			new_param_waveform_warptype = control_selector(param_waveform_warptype, get_warptype_name(param_waveform_warptype), (param_waveform_warptype + 1)%WAVEFORM_WARPTYPE#, (param_waveform_warptype - 1 + WAVEFORM_WARPTYPE#)%WAVEFORM_WARPTYPE#); 
+			new_param_waveform_warptype != param_waveform_warptype ? (
+				param_waveform_warptype = new_param_waveform_warptype;
+				can_recompute = 1;
+			);
+		ui_pop();
+	ui_split_next();
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_pad();
+				ui_align(1, 0.5);
+				ui_text("warp strength");
+			ui_pop();
+			
+			new_param_waveform_warpamount = control_hslider(param_waveform_warpamount, 0, 5, 2);
+			new_param_waveform_warpamount != param_waveform_warpamount ? (
+				param_waveform_warpamount = new_param_waveform_warpamount;
+				can_recompute = 1;
+			);
+		ui_pop();
+	ui_split_next();
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_pad();
+				ui_align(1, 0.5);
+				ui_text("mod");
+			ui_pop();
+			
+			new_param_waveform_mod1strength = control_hslider(param_waveform_mod1strength, 0, 3, 3);
+			new_param_waveform_mod1strength != param_waveform_mod1strength ? (
+				param_waveform_mod1strength = new_param_waveform_mod1strength;
+				can_recompute = 1;
+			);
+		ui_pop();
+	ui_split_next();
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_pad();
+				ui_align(1, 0.5);
+				ui_text("mod phase");
+			ui_pop();
+			
+			new_param_waveform_mod1phase = control_hslider(param_waveform_mod1phase, 0, 2*$pi, 0);
+			new_param_waveform_mod1phase != param_waveform_mod1phase ? (
+				param_waveform_mod1phase = new_param_waveform_mod1phase;
+				can_recompute = 1;
+			);
+		ui_pop();
+	ui_pop();
+	
 ) : ui_screen() == "envelope" ? (
 	control_navbar("Envelope (ADSR)", -1, -1);
 	ui_split_topratio(1/5);
@@ -1774,6 +2018,16 @@ function read_var() local(var_id, i, effect) (
 	file_var(0, var_id);
 	var_id == VAR_ID#param_width_cents(1) ? (
 		param_width_cents = read_plain_var();
+	) : var_id == VAR_ID#param_waveform_type(2) ? (
+		param_waveform_type = read_plain_var();
+	) : var_id == VAR_ID#param_waveform_warptype(6) ? (
+		param_waveform_warptype = read_plain_var();
+	) : var_id == VAR_ID#param_waveform_warpamount(3) ? (
+		param_waveform_warpamount = read_plain_var();
+	) : var_id == VAR_ID#param_waveform_mod1strength(4) ? (
+		param_waveform_mod1strength = read_plain_var();
+	) : var_id == VAR_ID#param_waveform_mod1phase(5) ? (
+		param_waveform_mod1phase = read_plain_var();
 	) : var_id == VAR_ID#param_env_linear(99) ? (
 		param_env_linear = read_plain_var();
 	) : var_id == VAR_ID#param_attack(100) ? (
@@ -1856,6 +2110,11 @@ file_avail(0) >= 0 ? (
 	action_recompute = 1;
 ) : (
 	write_plain_var(VAR_ID#param_width_cents(1), param_width_cents);
+	write_plain_var(VAR_ID#param_waveform_type(2), param_waveform_type);
+	write_plain_var(VAR_ID#param_waveform_warptype(6), param_waveform_warptype);
+	write_plain_var(VAR_ID#param_waveform_warpamount(3), param_waveform_warpamount);
+	write_plain_var(VAR_ID#param_waveform_mod1strength(4), param_waveform_mod1strength);
+	write_plain_var(VAR_ID#param_waveform_mod1phase(5), param_waveform_mod1phase);
 	write_plain_var(VAR_ID#param_attack(100), param_attack);
 	write_plain_var(VAR_ID#param_decay(101), param_decay);
 	write_plain_var(VAR_ID#param_sustain(102), param_sustain);

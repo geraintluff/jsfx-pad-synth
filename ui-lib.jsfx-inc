@@ -1245,10 +1245,10 @@ function control_hslider(value, range_low, range_high, curve_bias) local(valuera
 		log(valueratio*(exp(curve_bias) - 1) + 1)/curve_bias
 	) : valueratio;
 	ui_mouse_down() || ui_drag() ? (
-		screenratio = max(0, min(1, ui_mouse_xratio()));
+		newscreenratio = max(0, min(1, ui_mouse_xratio()));
 		valueratio = curve_bias ? (
-			(exp(screenratio*curve_bias) - 1)/(exp(curve_bias) - 1)
-		) : screenratio;
+			(exp(newscreenratio*curve_bias) - 1)/(exp(curve_bias) - 1)
+		) : newscreenratio;
 		value = range_low + (range_high - range_low)*valueratio;
 	);
 
