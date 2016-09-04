@@ -2,7 +2,7 @@
 
 This is a synth written in REAPER's JSFX language.
 
-To use, copy `pad-synth.jsfx` to REAPER's JSFX directory.  This synth uses a JSFX UI library for its interface - you'll need to have `ui-lib.jsfx-inc` in the same directory as this synth for it to work.
+To use, copy `pad-synth.jsfx` to REAPER's JSFX directory.  This synth uses a [JSFX UI library](https://github.com/geraintluff/jsfx-ui-lib) for its interface - you'll need to have `ui-lib.jsfx-inc` in the same directory as this synth for it to work.
 
 Demos are available in the `demos/` directory.
 
