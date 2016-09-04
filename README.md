@@ -12,9 +12,7 @@ Demos are available in the `demos/` directory.
 
 A "model waveform" is generated, and this is used to generate a set of patches used by a sampling engine.
 
-![Waveform screen](demos/screen-waveform.png)
-
-This is based on the "padsynth" algorithm from ZynAddSubFX, where the samples are designed in the frequency domain and then IFFT'd.
+(This is based on the "padsynth" algorithm from ZynAddSubFX, where the samples are designed in the frequency domain and then IFFT'd.)
 
 ### Intermodulated effects
 
