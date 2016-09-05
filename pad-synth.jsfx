@@ -34,6 +34,9 @@ function get_warptype_name(index) (
 	: "(???)";
 );
 
+function mag_pow(x, p) (
+	x >= 0 ? pow(x, p) : -pow(-x, p);
+);
 function tanh(x) (
 	x >= 20 ? (
 		1;
@@ -132,7 +135,7 @@ uiblock_end = ui_setup(gen_spectrum_end);
 
 // Description of all effects in the system
 fx_spec_start = uiblock_end;
-fx_spec_count = 3/*FX_SPECLIST_INDEX: */;
+fx_spec_count = 5/*FX_SPECLIST_INDEX: */;
 fx_spec_headerlength = 9/*FX_HEADER: NAME, MODCOUNT, FUNC_INIT, CONFIG_UI_FUNCTION, CONFIG_SWAP_FUNCTION, CONFIG_DELETE_FUNCTION, SETUP_NOTE_FUNCTION, PRE_EXEC_NOTE_FUNCTION, EXEC_NOTE_FUNCTION*/;
 fx_spec_modlength = 3/*FX_MOD: RANGE, TYPE, NAME*/;
 fx_spec_var_count = 10; // Maximum number of modulatable parameters
@@ -904,6 +907,279 @@ function effect_note_exec_conmod(effect, note, notestate) local(source, value, t
 	);
 );
 
+//////////////// Distortion ////////////////
+
+1/*DIST_NOTE_STATE: */ > note_fx_statelength ? ui_error("note state too small for distortion");
+5/*DIST_STATE: */ > fx_list_statelength ? ui_error("effect state too small for distortion");
+effectspec = fx_spec_start + fx_spec_step*3/*FX_SPECLIST_INDEX:DISTORTION*/;
+effectspec[0/*FX_HEADER:NAME*/] = "Distortion";
+effectspec[1/*FX_HEADER:MODCOUNT*/] = 1;
+modspec = effectspec + fx_spec_headerlength + fx_spec_modlength*0/*DIST_NOTE_STATE:WET*/;
+modspec[2/*FX_MOD:NAME*/] = "Wet";
+modspec[1/*FX_MOD:TYPE*/] = 1/*FX_MODTYPE:MULT*/;
+modspec[0/*FX_MOD:RANGE*/] = 1;
+
+effectspec[2/*FX_HEADER:FUNC_INIT*/] = 4/*effect_init_dist*/;
+function effect_init_dist(effect) local(state) (
+	effect[1/*FX:NAME*/] = "Distortion";
+	state = effect + fx_list_headerlength;
+
+	state[0/*DIST_STATE:LIMIT_LOG*/] = log(0.25);
+	state[1/*DIST_STATE:CURVE*/] = 0/*DIST_CURVE:TANH*/;
+	state[2/*DIST_STATE:ASYMMETRY*/] = 0;
+	state[3/*DIST_STATE:POST_AMP_LOG*/] = 0;
+	state[4/*DIST_STATE:WET*/] = 0.75;
+);
+effectspec[3/*FX_HEADER:CONFIG_UI_FUNCTION*/] = 4/*effect_ui_dist*/;
+function effect_ui_dist(effect) local(state, effect_index, mod_range, i, value, preGain, postGain, asymmetry, tanh_asymmetry) (
+	effect_index = (effect - fx_list_start)/fx_list_step;
+	state = effect + fx_list_headerlength;
+
+	ui_split_top(ui_texth() + ui_hpadding()*3);
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_align(1, -1);
+				ui_padright();
+				ui_text("limit");
+			ui_pop();
+			ui_split_rightratio(0.2);
+				ui_padleft();
+				ui_align(0, -1);
+				ui_textnumber(state[0/*DIST_STATE:LIMIT_LOG*/]*20/log(10), "%0.1fdB");
+			ui_pop();
+			state[0/*DIST_STATE:LIMIT_LOG*/] = control_hslider(state[0/*DIST_STATE:LIMIT_LOG*/], -4, 0, -1);
+		ui_pop();
+	ui_split_next();
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_align(1, -1);
+				ui_padright();
+				ui_text("asymmetry");
+			ui_pop();
+			ui_split_rightratio(0.2);
+				ui_padleft();
+				ui_align(0, -1);
+				ui_textnumber(tanh(state[2/*DIST_STATE:ASYMMETRY*/])*100, "%i%%");
+			ui_pop();
+			state[2/*DIST_STATE:ASYMMETRY*/] = control_hslider(state[2/*DIST_STATE:ASYMMETRY*/], 0, 3, 3);
+		ui_pop();
+	ui_split_next();
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_align(1, -1);
+				ui_padright();
+				ui_text("post-amp");
+			ui_pop();
+			ui_split_rightratio(0.2);
+				ui_padleft();
+				ui_align(0, -1);
+				ui_textnumber(state[3/*DIST_STATE:POST_AMP_LOG*/]*20/log(10), "%0.1fdB");
+			ui_pop();
+			state[3/*DIST_STATE:POST_AMP_LOG*/] = control_hslider(state[3/*DIST_STATE:POST_AMP_LOG*/], 0, 2, 0);
+		ui_pop();
+	ui_split_next();
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_align(1, -1);
+				ui_padright();
+				ui_text("wet");
+			ui_pop();
+			ui_split_rightratio(0.2);
+				ui_padleft();
+				ui_align(0, -1);
+				ui_textnumber(state[4/*DIST_STATE:WET*/]*100, "%i%%");
+			ui_pop();
+			state[4/*DIST_STATE:WET*/] = control_hslider(state[4/*DIST_STATE:WET*/], 0, 1, 0);
+		ui_pop();
+	ui_pop();
+	
+	ui_color(0, 0, 0);
+	ui_fill();
+	ui_colora(255, 255, 255, 0.5);
+	gfx_line(ui_left(), ui_top() + ui_height()/2, ui_right(), ui_top() + ui_height()/2);
+	
+	preGain = exp(-state[0/*DIST_STATE:LIMIT_LOG*/]);
+	postGain = exp(state[3/*DIST_STATE:POST_AMP_LOG*/] + state[0/*DIST_STATE:LIMIT_LOG*/]);
+	asymmetry = state[2/*DIST_STATE:ASYMMETRY*/];
+	tanh_asymmetry = tanh(asymmetry);
+
+	ui_color(128, 192, 256);
+	i = 1;
+	gfx_x = ui_left();
+	value = -1;
+	value += (postGain*(tanh(preGain*-1 + asymmetry) - tanh_asymmetry) - value)*state[4/*DIST_STATE:WET*/];
+	value = max(-1, min(1, value));
+	gfx_y = ui_bottom() - (1 + value)*0.5*ui_height();
+	while (i <= 1000) (
+		value = (i/1000)*2 - 1;
+		value += (postGain*(tanh(preGain*value + asymmetry) - tanh_asymmetry) - value)*state[4/*DIST_STATE:WET*/];
+		value = max(-1, min(1, value));
+		gfx_lineto(ui_left() + (i/1000)*ui_width(), ui_bottom() - (1 + value)*0.5*ui_height());
+		i += 1;
+	);
+	control_finish_enabled(1);
+);
+effectspec[4/*FX_HEADER:CONFIG_SWAP_FUNCTION*/] = 0;
+effectspec[5/*FX_HEADER:CONFIG_DELETE_FUNCTION*/] = 0;
+effectspec[6/*FX_HEADER:SETUP_NOTE_FUNCTION*/] = 4/*effect_note_setup_dist*/;
+function effect_note_setup_dist(effect, note, notestate) local(state) (
+	state = effect + fx_list_headerlength;
+);
+effectspec[7/*FX_HEADER:PRE_EXEC_NOTE_FUNCTION*/] = 3/*effect_note_pre_exec_dist*/;
+function effect_note_pre_exec_dist(effect, note, notestate) (
+	state = effect + fx_list_headerlength;
+	notestate[0/*DIST_NOTE_STATE:WET*/] = state[4/*DIST_STATE:WET*/];
+);
+effectspec[8/*FX_HEADER:EXEC_NOTE_FUNCTION*/] = 4/*effect_note_exec_dist*/;
+function effect_note_exec_dist(effect, note, notestate) local(asymmetry, tanh_asymmetry, wet, preGain, postGain) (
+	state = effect + fx_list_headerlength;
+
+	preGain = exp(-state[0/*DIST_STATE:LIMIT_LOG*/]);
+	postGain = exp(state[3/*DIST_STATE:POST_AMP_LOG*/] + state[0/*DIST_STATE:LIMIT_LOG*/]);
+	debug.preGain = preGain;
+	debug.postGain = postGain;
+	debug.bothGain = preGain*postGain;
+
+	wet = min(1, notestate[0/*DIST_NOTE_STATE:WET*/]);
+	asymmetry = state[2/*DIST_STATE:ASYMMETRY*/];
+	debug.asymmetry = asymmetry;
+	asymmetry ? (
+		tanh_asymmetry = tanh(asymmetry);
+		debug.tanh_asymmetry = tanh_asymmetry;
+		note[6/*NOTE:AUDIO_LEFT*/] += (postGain*(tanh(preGain*note[6/*NOTE:AUDIO_LEFT*/] + asymmetry) - tanh_asymmetry) - note[6/*NOTE:AUDIO_LEFT*/])*wet;
+		note[7/*NOTE:AUDIO_RIGHT*/] += (postGain*(tanh(preGain*note[7/*NOTE:AUDIO_RIGHT*/] + asymmetry) - tanh_asymmetry) - note[7/*NOTE:AUDIO_RIGHT*/])*wet;
+	) : (
+		note[6/*NOTE:AUDIO_LEFT*/] += (postGain*tanh(preGain*note[6/*NOTE:AUDIO_LEFT*/]) - note[6/*NOTE:AUDIO_LEFT*/])*wet;
+		note[7/*NOTE:AUDIO_RIGHT*/] += (postGain*tanh(preGain*note[7/*NOTE:AUDIO_RIGHT*/]) - note[7/*NOTE:AUDIO_RIGHT*/])*wet;
+	);
+);
+
+//////////////// FM ////////////////
+
+4/*FM_STATE: */ > fx_list_statelength ? ui_error("effect state too small for FM");
+5/*FM_NOTE_STATE: AMP_BASE, OFFSET_HZ_BASE, PHASE*/ > note_fx_statelength ? ui_error("note state too small for FM");
+effectspec = fx_spec_start + fx_spec_step*4/*FX_SPECLIST_INDEX:FM*/;
+effectspec[0/*FX_HEADER:NAME*/] = "Harmonic Modulator (FM)";
+effectspec[1/*FX_HEADER:MODCOUNT*/] = 2;
+modspec = effectspec + fx_spec_headerlength + fx_spec_modlength*0/*FM_NOTE_STATE:AMP*/;
+modspec[2/*FX_MOD:NAME*/] = "Amount";
+modspec[1/*FX_MOD:TYPE*/] = 1/*FX_MODTYPE:MULT*/;
+modspec[0/*FX_MOD:RANGE*/] = 1;
+modspec = effectspec + fx_spec_headerlength + fx_spec_modlength*1/*FM_NOTE_STATE:OFFSET_HZ*/;
+modspec[2/*FX_MOD:NAME*/] = "Offset (Hz)";
+modspec[1/*FX_MOD:TYPE*/] = 0/*FX_MODTYPE:ADD*/;
+modspec[0/*FX_MOD:RANGE*/] = 10;
+
+effectspec[2/*FX_HEADER:FUNC_INIT*/] = 5/*effect_init_fm*/;
+function effect_init_fm(effect) local(state) (
+	effect[1/*FX:NAME*/] = "Harmonic Modulator (FM)";
+	
+	state = effect + fx_list_headerlength;
+	state[0/*FM_STATE:HARMONIC_CENTER*/] = 1; // Average freq will be multiple of base freq
+	state[1/*FM_STATE:HARMONIC_CYCLES*/] = 1; // How many freq-mod cycles per wavelength
+	state[2/*FM_STATE:AMP*/] = 0.5; // Between 0 and 1
+	state[3/*FM_STATE:OFFSET_HZ*/] = 0; // Harmonic frequency will be above/below by this much
+);
+effectspec[3/*FX_HEADER:CONFIG_UI_FUNCTION*/] = 5/*effect_ui_fm*/;
+function effect_ui_fm(effect) local(state, effect_index, mod_range) (
+	effect_index = (effect - fx_list_start)/fx_list_step;
+	state = effect + fx_list_headerlength;
+
+	ui_split_topratio(1/4);
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_align(1, -1);
+				ui_padright();
+				ui_text("harmonic");
+			ui_pop();
+			ui_split_rightratio(0.2);
+				ui_padleft();
+				ui_align(0, -1);
+				ui_textnumber(state[0/*FM_STATE:HARMONIC_CENTER*/], "%0.1f");
+			ui_pop();
+			state[0/*FM_STATE:HARMONIC_CENTER*/] = control_hslider(state[0/*FM_STATE:HARMONIC_CENTER*/], 0, 2, 0);
+			state[0/*FM_STATE:HARMONIC_CENTER*/] = max(0.5, floor(state[0/*FM_STATE:HARMONIC_CENTER*/]*2 + 0.5)/2);
+		ui_pop();
+	ui_split_next();
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_padright();
+				ui_align(1, -1);
+				ui_text("modulation");
+			ui_pop();
+			ui_split_rightratio(0.2);
+				ui_padleft();
+				ui_align(0, -1);
+				ui_textnumber(state[1/*FM_STATE:HARMONIC_CYCLES*/], "%0.1f");
+			ui_pop();
+			state[1/*FM_STATE:HARMONIC_CYCLES*/] = control_hslider(state[1/*FM_STATE:HARMONIC_CYCLES*/], 0, 5, 0);
+			state[1/*FM_STATE:HARMONIC_CYCLES*/] = max(0.5, floor(state[1/*FM_STATE:HARMONIC_CYCLES*/]*2 + 0.5)/2);
+		ui_pop();
+	ui_split_next();
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_padright();
+				ui_align(1, -1);
+				ui_text("range");
+			ui_pop();
+			ui_split_rightratio(0.2);
+				ui_padleft();
+				ui_align(0, -1);
+				ui_textnumber(state[2/*FM_STATE:AMP*/]*100, "%i%%");
+			ui_pop();
+			state[2/*FM_STATE:AMP*/] = control_hslider(state[2/*FM_STATE:AMP*/], 0, 1, 0);
+		ui_pop();
+	ui_split_next();
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_padright();
+				ui_align(1, -1);
+				ui_text("offset");
+			ui_pop();
+			ui_split_rightratio(0.2);
+				ui_padleft();
+				ui_align(0, -1);
+				ui_textnumber(state[3/*FM_STATE:OFFSET_HZ*/], "%0.1fHz");
+			ui_pop();
+			state[3/*FM_STATE:OFFSET_HZ*/] = mag_pow(control_hslider(mag_pow(state[3/*FM_STATE:OFFSET_HZ*/], 1/3), -5, 5, 0), 3);
+		ui_pop();
+	ui_pop();
+);
+effectspec[4/*FX_HEADER:CONFIG_SWAP_FUNCTION*/] = 0;
+effectspec[5/*FX_HEADER:CONFIG_DELETE_FUNCTION*/] = 0;
+effectspec[6/*FX_HEADER:SETUP_NOTE_FUNCTION*/] = 5/*effect_note_setup_fm*/;
+function effect_note_setup_fm(effect, note, notestate) local(state) (
+	state = effect + fx_list_headerlength;
+	// Two modulatable parameters
+
+	notestate[2/*FM_NOTE_STATE:AMP_BASE*/] = state[2/*FM_STATE:AMP*/];
+	notestate[3/*FM_NOTE_STATE:OFFSET_HZ_BASE*/] = state[3/*FM_STATE:OFFSET_HZ*/];
+	
+	// Use the remainder for private state
+	notestate[4/*FM_NOTE_STATE:PHASE*/] = rand(2*$pi);
+);
+effectspec[7/*FX_HEADER:PRE_EXEC_NOTE_FUNCTION*/] = 4/*effect_note_pre_exec_fm*/;
+function effect_note_pre_exec_fm(effect, note, notestate) (
+	notestate[0/*FM_NOTE_STATE:AMP*/] = notestate[2/*FM_NOTE_STATE:AMP_BASE*/];
+	notestate[1/*FM_NOTE_STATE:OFFSET_HZ*/] = notestate[3/*FM_NOTE_STATE:OFFSET_HZ_BASE*/];
+);
+effectspec[8/*FX_HEADER:EXEC_NOTE_FUNCTION*/] = 5/*effect_note_exec_fm*/;
+function effect_note_exec_fm(effect, note, notestate) local(freq, phase, modfreq, amp) (
+	state = effect + fx_list_headerlength;
+
+	amp = max(0, min(0.99, notestate[0/*FM_NOTE_STATE:AMP*/]));
+	freq = exp(note[0/*NOTE:LOG_FREQ*/]);
+	phase = notestate[4/*FM_NOTE_STATE:PHASE*/];
+	phase += (freq*state[1/*FM_STATE:HARMONIC_CYCLES*/] + notestate[1/*FM_NOTE_STATE:OFFSET_HZ*/])*2*$pi*invsrate;
+	modfreq = freq*state[0/*FM_STATE:HARMONIC_CENTER*/]*(1 + sin(phase)*amp);
+	debug.modfreq = modfreq;
+	debug.offset_hz = notestate[1/*FM_NOTE_STATE:OFFSET_HZ*/];
+	note[0/*NOTE:LOG_FREQ*/] = log(modfreq);
+	
+	phase > $pi ? phase -= 2*$pi;
+	notestate[4/*FM_NOTE_STATE:PHASE*/] = phase;
+);
+
 //////////////// Effect Manipulation ////////////////
 
 function effect_init(function_id, effect_slot) (
@@ -911,6 +1187,8 @@ function effect_init(function_id, effect_slot) (
 		function_id == 1 ? effect_init_lfo(effect_slot)
 		: function_id == 2 ? effect_init_filter(effect_slot)
 		: function_id == 3 ? effect_init_conmod(effect_slot)
+		: function_id == 4 ? effect_init_dist(effect_slot)
+		: function_id == 5 ? effect_init_fm(effect_slot)
 	);
 );;
 function config_ui(function_id, effect) (
@@ -918,6 +1196,8 @@ function config_ui(function_id, effect) (
 		function_id == 1 ? effect_ui_lfo(effect)
 		: function_id == 2 ? effect_ui_filter(effect)
 		: function_id == 3 ? effect_ui_conmod(effect)
+		: function_id == 4 ? effect_ui_dist(effect)
+		: function_id == 5 ? effect_ui_fm(effect)
 	);
 );;
 function config_swap(function_id, effect, index1, index2) (
@@ -937,6 +1217,8 @@ function note_setup(function_id, effect, note, notestate) (
 		function_id == 1 ? effect_note_setup_lfo(effect, note, notestate)
 		: function_id == 2 ? effect_note_setup_filter(effect, note, notestate)
 		: function_id == 3 ? effect_note_setup_conmod(effect, note, notestate)
+		: function_id == 4 ? effect_note_setup_dist(effect, note, notestate)
+		: function_id == 5 ? effect_note_setup_fm(effect, note, notestate)
 	);
 );;
 function note_exec(function_id, effect, note, notestate) (
@@ -944,12 +1226,16 @@ function note_exec(function_id, effect, note, notestate) (
 		function_id == 1 ? effect_note_exec_lfo(effect, note, notestate)
 		: function_id == 2 ? effect_note_exec_filter(effect, note, notestate)
 		: function_id == 3 ? effect_note_exec_conmod(effect, note, notestate)
+		: function_id == 4 ? effect_note_exec_dist(effect, note, notestate)
+		: function_id == 5 ? effect_note_exec_fm(effect, note, notestate)
 	);
 );;
 function note_pre_exec(function_id, effect, note, notestate) (
 	function_id ? (
 		function_id == 1 ? effect_note_pre_exec_lfo(effect, note, notestate)
 		: function_id == 2 ? effect_note_pre_exec_filter(effect, note, notestate)
+		: function_id == 3 ? effect_note_pre_exec_dist(effect, note, notestate)
+		: function_id == 4 ? effect_note_pre_exec_fm(effect, note, notestate)
 	);
 );;
 
@@ -1083,6 +1369,7 @@ recompute_index < wavetables_count ? (
 		
 		harmonic_range_factor = exp(param_width*2);
 		i = 1;
+		phase_offset = $pi/4;
 		while (
 			power = 0;
 			indexfreq = i/wavetable_sampleslength*wavetable_refsrate;
@@ -1103,16 +1390,17 @@ recompute_index < wavetables_count ? (
 			);
 			amp = sqrt(power);
 			phase1 = rand(2*$pi);
-			//phase2 = rand(2*$pi);
 			// Attempt to even out the mid-channel energy while still making the two channels uncorrelated
-			phase2 = (rand() < 0.5) ? phase1 + $pi/2 : phase1 - $pi/2;
+			phase_offset += (rand() < 0.5) ? $pi/2 : -$pi/2;
+			phase2 = phase1 + phase_offset;
+			//phase2 = rand(2*$pi);
 	
 			leftR = amp*cos(phase1);
 			leftI = amp*sin(phase1);
 			rightR = amp*cos(phase2);
 			rightI = amp*sin(phase2);
 			
-			0 ? ( // Mid/side decode
+			1 ? ( // Mid/side decode
 				mid = leftR;
 				side = rightR;
 				leftR = mid - side;
@@ -1177,12 +1465,14 @@ while (midirecv(midi_offset, midi_msg1, midi_msg23)) (
 	midi_msg3 = midi_msg23>>8; // velocity / value
 	(midi_type == $x9 && midi_msg3 != 0) ? (
 		// Note on
+		debug.note_on += 1;
 		note = notes_start;
 		while (note[2/*NOTE:ACTIVE*/] && note < notes_end) (
 			options_forceduplicaterelease && (note[4/*NOTE:NOTE*/] == midi_msg2) ? (
 				// Force release of duplicate notes
 				note[8/*NOTE:SECONDSFROMEND*/] = max(note[8/*NOTE:SECONDSFROMEND*/], -midi_offset*invsrate);
 				note[9/*NOTE:DECAYRATE*/] = 1;
+				debug.forcerelease = note[4/*NOTE:NOTE*/];
 			);
 			note += notes_step;
 		);
@@ -1222,6 +1512,7 @@ while (midirecv(midi_offset, midi_msg1, midi_msg23)) (
 	) : (midi_type == $x8 || (midi_type == $x9 && midi_msg3 == 0)) ? (
 		// Note off 
 		note = notes_start;
+		debug.note_off += 1;
 		while (
 			note[2/*NOTE:ACTIVE*/] && note[10/*NOTE:CHANNEL*/] == midi_channel && note[4/*NOTE:NOTE*/] == midi_msg2 ? (
 				note[8/*NOTE:SECONDSFROMEND*/] = max(note[8/*NOTE:SECONDSFROMEND*/], -midi_offset*invsrate);
@@ -1233,6 +1524,7 @@ while (midirecv(midi_offset, midi_msg1, midi_msg23)) (
 		midi_msg2 == 121 ? (
 			reset_controllers();
 		) : midi_msg == 123 ? (
+			debug.stopallnotes += 1;
 			note = notes_start;
 			while (note < notes_end) (
 				note[2/*NOTE:ACTIVE*/] ? (
@@ -1357,9 +1649,12 @@ while (
 			spl0 += note[6/*NOTE:AUDIO_LEFT*/]*note[1/*NOTE:AMP*/]*env;
 			spl1 += note[7/*NOTE:AUDIO_RIGHT*/]*note[1/*NOTE:AMP*/]*env;
 		);
+		
+		debug.decayrate = note[9/*NOTE:DECAYRATE*/];
 
 		note[5/*NOTE:SECONDSFROMSTART*/] += invsrate;
 		secondsFromEnd >= 0 ? (
+			debug.secondsFromEnd = secondsFromEnd;
 			note[9/*NOTE:DECAYRATE*/] = max(1 - controller_values[64], note[9/*NOTE:DECAYRATE*/]);
 			note[8/*NOTE:SECONDSFROMEND*/] += invsrate*note[9/*NOTE:DECAYRATE*/];
 		) : (
@@ -1370,7 +1665,7 @@ while (
 	note < note_active_end;
 );
 
-@gfx
+@gfx 580 460
 
 //////////////// Graphics ////////////////
 
@@ -1403,6 +1698,7 @@ function draw_waveform() local(wavetable, samples, value, x, y, gi, gis, box_lef
 	gfx_r = 0.75;
 	gfx_g = 0.5;
 	gfx_b = 0.25;
+	gfx_a = 1;
 	gfx_x = box_left;
 	gfx_y = box_top + box_height/2;
 	while (

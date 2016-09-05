@@ -34,6 +34,9 @@ function get_warptype_name(index) (
 	: "(???)";
 );
 
+function mag_pow(x, p) (
+	x >= 0 ? pow(x, p) : -pow(-x, p);
+);
 function tanh(x) (
 	x >= 20 ? (
 		1;
@@ -1051,6 +1054,132 @@ function effect_note_exec_dist(effect, note, notestate) local(asymmetry, tanh_as
 	);
 );
 
+//////////////// FM ////////////////
+
+FM_STATE## > fx_list_statelength ? ui_error("effect state too small for FM");
+FM_NOTE_STATE## > note_fx_statelength ? ui_error("note state too small for FM");
+effectspec = fx_spec_start + fx_spec_step*FX_SPECLIST_INDEX#FM(4);
+effectspec[FX_HEADER#NAME] = "Harmonic Modulator (FM)";
+effectspec[FX_HEADER#MODCOUNT] = 2;
+modspec = effectspec + fx_spec_headerlength + fx_spec_modlength*FM_NOTE_STATE#AMP(0);
+modspec[FX_MOD#NAME] = "Amount";
+modspec[FX_MOD#TYPE] = FX_MODTYPE#MULT;
+modspec[FX_MOD#RANGE] = 1;
+modspec = effectspec + fx_spec_headerlength + fx_spec_modlength*FM_NOTE_STATE#OFFSET_HZ(1);
+modspec[FX_MOD#NAME] = "Offset (Hz)";
+modspec[FX_MOD#TYPE] = FX_MODTYPE#ADD;
+modspec[FX_MOD#RANGE] = 10;
+
+effectspec[FX_HEADER#FUNC_INIT] = {effect_init}effect_init_fm;
+function effect_init_fm(effect) local(state) (
+	effect[FX#NAME] = "Harmonic Modulator (FM)";
+	
+	state = effect + fx_list_headerlength;
+	state[FM_STATE#HARMONIC_CENTER(0)] = 1; // Average freq will be multiple of base freq
+	state[FM_STATE#HARMONIC_CYCLES(1)] = 1; // How many freq-mod cycles per wavelength
+	state[FM_STATE#AMP(2)] = 0.5; // Between 0 and 1
+	state[FM_STATE#OFFSET_HZ(3)] = 0; // Harmonic frequency will be above/below by this much
+);
+effectspec[FX_HEADER#CONFIG_UI_FUNCTION] = {config_ui}effect_ui_fm;
+function effect_ui_fm(effect) local(state, effect_index, mod_range) (
+	effect_index = (effect - fx_list_start)/fx_list_step;
+	state = effect + fx_list_headerlength;
+
+	ui_split_topratio(1/4);
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_align(1, -1);
+				ui_padright();
+				ui_text("harmonic");
+			ui_pop();
+			ui_split_rightratio(0.2);
+				ui_padleft();
+				ui_align(0, -1);
+				ui_textnumber(state[FM_STATE#HARMONIC_CENTER], "%0.1f");
+			ui_pop();
+			state[FM_STATE#HARMONIC_CENTER] = control_hslider(state[FM_STATE#HARMONIC_CENTER], 0, 2, 0);
+			state[FM_STATE#HARMONIC_CENTER] = max(0.5, floor(state[FM_STATE#HARMONIC_CENTER]*2 + 0.5)/2);
+		ui_pop();
+	ui_split_next();
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_padright();
+				ui_align(1, -1);
+				ui_text("modulation");
+			ui_pop();
+			ui_split_rightratio(0.2);
+				ui_padleft();
+				ui_align(0, -1);
+				ui_textnumber(state[FM_STATE#HARMONIC_CYCLES], "%0.1f");
+			ui_pop();
+			state[FM_STATE#HARMONIC_CYCLES] = control_hslider(state[FM_STATE#HARMONIC_CYCLES], 0, 5, 0);
+			state[FM_STATE#HARMONIC_CYCLES] = max(0.5, floor(state[FM_STATE#HARMONIC_CYCLES]*2 + 0.5)/2);
+		ui_pop();
+	ui_split_next();
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_padright();
+				ui_align(1, -1);
+				ui_text("range");
+			ui_pop();
+			ui_split_rightratio(0.2);
+				ui_padleft();
+				ui_align(0, -1);
+				ui_textnumber(state[FM_STATE#AMP]*100, "%i%%");
+			ui_pop();
+			state[FM_STATE#AMP] = control_hslider(state[FM_STATE#AMP], 0, 1, 0);
+		ui_pop();
+	ui_split_next();
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_padright();
+				ui_align(1, -1);
+				ui_text("offset");
+			ui_pop();
+			ui_split_rightratio(0.2);
+				ui_padleft();
+				ui_align(0, -1);
+				ui_textnumber(state[FM_STATE#OFFSET_HZ], "%0.1fHz");
+			ui_pop();
+			state[FM_STATE#OFFSET_HZ] = mag_pow(control_hslider(mag_pow(state[FM_STATE#OFFSET_HZ], 1/3), -5, 5, 0), 3);
+		ui_pop();
+	ui_pop();
+);
+effectspec[FX_HEADER#CONFIG_SWAP_FUNCTION] = 0;
+effectspec[FX_HEADER#CONFIG_DELETE_FUNCTION] = 0;
+effectspec[FX_HEADER#SETUP_NOTE_FUNCTION] = {note_setup}effect_note_setup_fm;
+function effect_note_setup_fm(effect, note, notestate) local(state) (
+	state = effect + fx_list_headerlength;
+	// Two modulatable parameters
+
+	notestate[FM_NOTE_STATE#AMP_BASE] = state[FM_STATE#AMP];
+	notestate[FM_NOTE_STATE#OFFSET_HZ_BASE] = state[FM_STATE#OFFSET_HZ];
+	
+	// Use the remainder for private state
+	notestate[FM_NOTE_STATE#PHASE] = rand(2*$pi);
+);
+effectspec[FX_HEADER#PRE_EXEC_NOTE_FUNCTION] = {note_pre_exec}effect_note_pre_exec_fm;
+function effect_note_pre_exec_fm(effect, note, notestate) (
+	notestate[FM_NOTE_STATE#AMP] = notestate[FM_NOTE_STATE#AMP_BASE];
+	notestate[FM_NOTE_STATE#OFFSET_HZ] = notestate[FM_NOTE_STATE#OFFSET_HZ_BASE];
+);
+effectspec[FX_HEADER#EXEC_NOTE_FUNCTION] = {note_exec}effect_note_exec_fm;
+function effect_note_exec_fm(effect, note, notestate) local(freq, phase, modfreq, amp) (
+	state = effect + fx_list_headerlength;
+
+	amp = max(0, min(0.99, notestate[FM_NOTE_STATE#AMP]));
+	freq = exp(note[NOTE#LOG_FREQ]);
+	phase = notestate[FM_NOTE_STATE#PHASE];
+	phase += (freq*state[FM_STATE#HARMONIC_CYCLES] + notestate[FM_NOTE_STATE#OFFSET_HZ])*2*$pi*invsrate;
+	modfreq = freq*state[FM_STATE#HARMONIC_CENTER]*(1 + sin(phase)*amp);
+	debug.modfreq = modfreq;
+	debug.offset_hz = notestate[FM_NOTE_STATE#OFFSET_HZ];
+	note[NOTE#LOG_FREQ] = log(modfreq);
+	
+	phase > $pi ? phase -= 2*$pi;
+	notestate[FM_NOTE_STATE#PHASE] = phase;
+);
+
 //////////////// Effect Manipulation ////////////////
 
 function {effect_init}(effect_slot);
@@ -1191,6 +1320,7 @@ recompute_index < wavetables_count ? (
 		
 		harmonic_range_factor = exp(param_width*2);
 		i = 1;
+		phase_offset = $pi/4;
 		while (
 			power = 0;
 			indexfreq = i/wavetable_sampleslength*wavetable_refsrate;
@@ -1211,16 +1341,17 @@ recompute_index < wavetables_count ? (
 			);
 			amp = sqrt(power);
 			phase1 = rand(2*$pi);
-			//phase2 = rand(2*$pi);
 			// Attempt to even out the mid-channel energy while still making the two channels uncorrelated
-			phase2 = (rand() < 0.5) ? phase1 + $pi/2 : phase1 - $pi/2;
+			phase_offset += (rand() < 0.5) ? $pi/2 : -$pi/2;
+			phase2 = phase1 + phase_offset;
+			//phase2 = rand(2*$pi);
 	
 			leftR = amp*cos(phase1);
 			leftI = amp*sin(phase1);
 			rightR = amp*cos(phase2);
 			rightI = amp*sin(phase2);
 			
-			0 ? ( // Mid/side decode
+			1 ? ( // Mid/side decode
 				mid = leftR;
 				side = rightR;
 				leftR = mid - side;
@@ -1285,12 +1416,14 @@ while (midirecv(midi_offset, midi_msg1, midi_msg23)) (
 	midi_msg3 = midi_msg23>>8; // velocity / value
 	(midi_type == $x9 && midi_msg3 != 0) ? (
 		// Note on
+		debug.note_on += 1;
 		note = notes_start;
 		while (note[NOTE#ACTIVE] && note < notes_end) (
 			options_forceduplicaterelease && (note[NOTE#NOTE] == midi_msg2) ? (
 				// Force release of duplicate notes
 				note[NOTE#SECONDSFROMEND] = max(note[NOTE#SECONDSFROMEND], -midi_offset*invsrate);
 				note[NOTE#DECAYRATE] = 1;
+				debug.forcerelease = note[NOTE#NOTE];
 			);
 			note += notes_step;
 		);
@@ -1330,6 +1463,7 @@ while (midirecv(midi_offset, midi_msg1, midi_msg23)) (
 	) : (midi_type == $x8 || (midi_type == $x9 && midi_msg3 == 0)) ? (
 		// Note off 
 		note = notes_start;
+		debug.note_off += 1;
 		while (
 			note[NOTE#ACTIVE] && note[NOTE#CHANNEL] == midi_channel && note[NOTE#NOTE] == midi_msg2 ? (
 				note[NOTE#SECONDSFROMEND] = max(note[NOTE#SECONDSFROMEND], -midi_offset*invsrate);
@@ -1341,6 +1475,7 @@ while (midirecv(midi_offset, midi_msg1, midi_msg23)) (
 		midi_msg2 == 121 ? (
 			reset_controllers();
 		) : midi_msg == 123 ? (
+			debug.stopallnotes += 1;
 			note = notes_start;
 			while (note < notes_end) (
 				note[NOTE#ACTIVE] ? (
@@ -1465,9 +1600,12 @@ while (
 			spl0 += note[NOTE#AUDIO_LEFT]*note[NOTE#AMP]*env;
 			spl1 += note[NOTE#AUDIO_RIGHT]*note[NOTE#AMP]*env;
 		);
+		
+		debug.decayrate = note[NOTE#DECAYRATE];
 
 		note[NOTE#SECONDSFROMSTART] += invsrate;
 		secondsFromEnd >= 0 ? (
+			debug.secondsFromEnd = secondsFromEnd;
 			note[NOTE#DECAYRATE] = max(1 - controller_values[64], note[NOTE#DECAYRATE]);
 			note[NOTE#SECONDSFROMEND] += invsrate*note[NOTE#DECAYRATE];
 		) : (
@@ -1511,6 +1649,7 @@ function draw_waveform() local(wavetable, samples, value, x, y, gi, gis, box_lef
 	gfx_r = 0.75;
 	gfx_g = 0.5;
 	gfx_b = 0.25;
+	gfx_a = 1;
 	gfx_x = box_left;
 	gfx_y = box_top + box_height/2;
 	while (
