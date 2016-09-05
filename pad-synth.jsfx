@@ -172,9 +172,9 @@ function get_mod_range(effectIndex, modIndex) local(target_effect, target_spec, 
 function get_mod_type(effectIndex, modIndex) local(target_effect, target_mod) (
 	effectIndex < 0 ? (
 		modIndex == 0 ? (
-			0/*FX_MODTYPE:ADD*/;
+			0/*FX_MODTYPE:MULT*/;
 		) : (
-			1/*FX_MODTYPE:MULT*/;
+			0/*FX_MODTYPE:MULT*/;
 		);
 	) : (
 		target_effect = fx_list_start + fx_list_step*effectIndex;
@@ -187,7 +187,7 @@ function get_mod_type(effectIndex, modIndex) local(target_effect, target_mod) (
 function get_mod_index(effectIndex, modIndex) (
 	effectIndex < 0 ? (
 		modIndex == 0 ? (
-			0/*NOTE:LOG_FREQ*/;
+			0/*NOTE:FREQ*/;
 		) : (
 			1/*NOTE:AMP*/;
 		);
@@ -268,7 +268,7 @@ function get_controller_name(index) (
 reset_controllers();
 
 notes_start = controller_values_end;
-note_headerlength = 16/*NOTE: LOG_FREQ, AMP, ACTIVE, VEL, NOTE, SECONDSFROMSTART, AUDIO_LEFT, AUDIO_RIGHT, SECONDSFROMEND, DECAYRATE, CHANNEL, LOG_FREQ_BASE, AMP_BASE, WAVEINDEX, SAMPLEPOS, ENV*/;
+note_headerlength = 16/*NOTE: FREQ, AMP, ACTIVE, VEL, NOTE, SECONDSFROMSTART, AUDIO_LEFT, AUDIO_RIGHT, SECONDSFROMEND, DECAYRATE, CHANNEL, FREQ_BASE, AMP_BASE, WAVEINDEX, SAMPLEPOS, ENV*/;
 
 note_fx_statelength = fx_list_statelength;
 notes_step = note_headerlength + note_fx_statelength*fx_list_maxcount;
@@ -312,11 +312,11 @@ effectspec[0/*FX_HEADER:NAME*/] = "LFO";
 effectspec[1/*FX_HEADER:MODCOUNT*/] = 2;
 modspec = effectspec + fx_spec_headerlength + fx_spec_modlength*0/*LFO_NOTE_STATE:LOG_FREQ*/;
 modspec[2/*FX_MOD:NAME*/] = "Frequency";
-modspec[1/*FX_MOD:TYPE*/] = 0/*FX_MODTYPE:ADD*/;
+modspec[1/*FX_MOD:TYPE*/] = 1/*FX_MODTYPE:ADD*/;
 modspec[0/*FX_MOD:RANGE*/] = 2;
 modspec = effectspec + fx_spec_headerlength + fx_spec_modlength*1/*LFO_NOTE_STATE:AMP*/;
 modspec[2/*FX_MOD:NAME*/] = "Amount";
-modspec[1/*FX_MOD:TYPE*/] = 1/*FX_MODTYPE:MULT*/;
+modspec[1/*FX_MOD:TYPE*/] = 0/*FX_MODTYPE:MULT*/;
 modspec[0/*FX_MOD:RANGE*/] = 1;
 
 effectspec[2/*FX_HEADER:FUNC_INIT*/] = 1/*effect_init_lfo*/;
@@ -467,7 +467,7 @@ function effect_note_exec_lfo(effect, note, notestate) local(angFreq, value, tar
 		angFreq = 2*$pi*exp(notestate[0/*LFO_NOTE_STATE:LOG_FREQ*/])*invsrate;
 		notestate[6/*LFO_NOTE_STATE:PHASE*/] += angFreq;
 		value = notestate[1/*LFO_NOTE_STATE:AMP*/]*sin(notestate[6/*LFO_NOTE_STATE:PHASE*/]);
-		notestate[5/*LFO_NOTE_STATE:MODTYPE*/] == 0/*FX_MODTYPE:ADD*/ ? (
+		notestate[5/*LFO_NOTE_STATE:MODTYPE*/] == 1/*FX_MODTYPE:ADD*/ ? (
 			note[targetIndex] += value;
 		) : (
 			note[targetIndex] *= max(0, 1 + value);
@@ -484,19 +484,19 @@ effectspec[0/*FX_HEADER:NAME*/] = "Filter";
 effectspec[1/*FX_HEADER:MODCOUNT*/] = 4;
 modspec = effectspec + fx_spec_headerlength + fx_spec_modlength*0/*FILTER_NOTE_STATE:LOG_FREQ*/;
 modspec[2/*FX_MOD:NAME*/] = "Frequency";
-modspec[1/*FX_MOD:TYPE*/] = 0/*FX_MODTYPE:ADD*/;
+modspec[1/*FX_MOD:TYPE*/] = 1/*FX_MODTYPE:ADD*/;
 modspec[0/*FX_MOD:RANGE*/] = 4;
 modspec = effectspec + fx_spec_headerlength + fx_spec_modlength*1/*FILTER_NOTE_STATE:Q*/;
 modspec[2/*FX_MOD:NAME*/] = "Q-Factor";
-modspec[1/*FX_MOD:TYPE*/] = 1/*FX_MODTYPE:MULT*/;
+modspec[1/*FX_MOD:TYPE*/] = 0/*FX_MODTYPE:MULT*/;
 modspec[0/*FX_MOD:RANGE*/] = 1;
 modspec = effectspec + fx_spec_headerlength + fx_spec_modlength*2/*FILTER_NOTE_STATE:ATTACK_AMOUNT*/;
 modspec[2/*FX_MOD:NAME*/] = "Attack (start)";
-modspec[1/*FX_MOD:TYPE*/] = 0/*FX_MODTYPE:ADD*/;
+modspec[1/*FX_MOD:TYPE*/] = 1/*FX_MODTYPE:ADD*/;
 modspec[0/*FX_MOD:RANGE*/] = 2;
 modspec = effectspec + fx_spec_headerlength + fx_spec_modlength*3/*FILTER_NOTE_STATE:ATTACK_TIME*/;
 modspec[2/*FX_MOD:NAME*/] = "Attack (time)";
-modspec[1/*FX_MOD:TYPE*/] = 1/*FX_MODTYPE:MULT*/;
+modspec[1/*FX_MOD:TYPE*/] = 0/*FX_MODTYPE:MULT*/;
 modspec[0/*FX_MOD:RANGE*/] = 1;
 
 effectspec[2/*FX_HEADER:FUNC_INIT*/] = 2/*effect_init_filter*/;
@@ -899,7 +899,7 @@ function effect_note_exec_conmod(effect, note, notestate) local(source, value, t
 		) : (
 			value = notestate[6/*CONMOD_NOTE_STATE:VALUE*/] = notestate[6/*CONMOD_NOTE_STATE:VALUE*/] + (value - notestate[6/*CONMOD_NOTE_STATE:VALUE*/])*notestate[7/*CONMOD_NOTE_STATE:SLEWFACTOR*/];
 		);
-		notestate[1/*CONMOD_NOTE_STATE:MODTYPE*/] == 0/*FX_MODTYPE:ADD*/ ? (
+		notestate[1/*CONMOD_NOTE_STATE:MODTYPE*/] == 1/*FX_MODTYPE:ADD*/ ? (
 			note[targetIndex] += value;
 		) : (
 			note[targetIndex] *= max(0, 1 + value);
@@ -916,7 +916,7 @@ effectspec[0/*FX_HEADER:NAME*/] = "Distortion";
 effectspec[1/*FX_HEADER:MODCOUNT*/] = 1;
 modspec = effectspec + fx_spec_headerlength + fx_spec_modlength*0/*DIST_NOTE_STATE:WET*/;
 modspec[2/*FX_MOD:NAME*/] = "Wet";
-modspec[1/*FX_MOD:TYPE*/] = 1/*FX_MODTYPE:MULT*/;
+modspec[1/*FX_MOD:TYPE*/] = 0/*FX_MODTYPE:MULT*/;
 modspec[0/*FX_MOD:RANGE*/] = 1;
 
 effectspec[2/*FX_HEADER:FUNC_INIT*/] = 4/*effect_init_dist*/;
@@ -1036,16 +1036,11 @@ function effect_note_exec_dist(effect, note, notestate) local(asymmetry, tanh_as
 
 	preGain = exp(-state[0/*DIST_STATE:LIMIT_LOG*/]);
 	postGain = exp(state[3/*DIST_STATE:POST_AMP_LOG*/] + state[0/*DIST_STATE:LIMIT_LOG*/]);
-	debug.preGain = preGain;
-	debug.postGain = postGain;
-	debug.bothGain = preGain*postGain;
 
 	wet = min(1, notestate[0/*DIST_NOTE_STATE:WET*/]);
 	asymmetry = state[2/*DIST_STATE:ASYMMETRY*/];
-	debug.asymmetry = asymmetry;
 	asymmetry ? (
 		tanh_asymmetry = tanh(asymmetry);
-		debug.tanh_asymmetry = tanh_asymmetry;
 		note[6/*NOTE:AUDIO_LEFT*/] += (postGain*(tanh(preGain*note[6/*NOTE:AUDIO_LEFT*/] + asymmetry) - tanh_asymmetry) - note[6/*NOTE:AUDIO_LEFT*/])*wet;
 		note[7/*NOTE:AUDIO_RIGHT*/] += (postGain*(tanh(preGain*note[7/*NOTE:AUDIO_RIGHT*/] + asymmetry) - tanh_asymmetry) - note[7/*NOTE:AUDIO_RIGHT*/])*wet;
 	) : (
@@ -1063,11 +1058,11 @@ effectspec[0/*FX_HEADER:NAME*/] = "Harmonic Modulator (FM)";
 effectspec[1/*FX_HEADER:MODCOUNT*/] = 2;
 modspec = effectspec + fx_spec_headerlength + fx_spec_modlength*0/*FM_NOTE_STATE:AMP*/;
 modspec[2/*FX_MOD:NAME*/] = "Amount";
-modspec[1/*FX_MOD:TYPE*/] = 1/*FX_MODTYPE:MULT*/;
+modspec[1/*FX_MOD:TYPE*/] = 0/*FX_MODTYPE:MULT*/;
 modspec[0/*FX_MOD:RANGE*/] = 1;
 modspec = effectspec + fx_spec_headerlength + fx_spec_modlength*1/*FM_NOTE_STATE:OFFSET_HZ*/;
 modspec[2/*FX_MOD:NAME*/] = "Offset (Hz)";
-modspec[1/*FX_MOD:TYPE*/] = 0/*FX_MODTYPE:ADD*/;
+modspec[1/*FX_MOD:TYPE*/] = 1/*FX_MODTYPE:ADD*/;
 modspec[0/*FX_MOD:RANGE*/] = 10;
 
 effectspec[2/*FX_HEADER:FUNC_INIT*/] = 5/*effect_init_fm*/;
@@ -1127,7 +1122,7 @@ function effect_ui_fm(effect) local(state, effect_index, mod_range) (
 				ui_align(0, -1);
 				ui_textnumber(state[2/*FM_STATE:AMP*/]*100, "%i%%");
 			ui_pop();
-			state[2/*FM_STATE:AMP*/] = control_hslider(state[2/*FM_STATE:AMP*/], 0, 1, 0);
+			state[2/*FM_STATE:AMP*/] = control_hslider(state[2/*FM_STATE:AMP*/], 0, 5, 0);
 		ui_pop();
 	ui_split_next();
 		ui_push_heighttext(-1);
@@ -1167,14 +1162,12 @@ effectspec[8/*FX_HEADER:EXEC_NOTE_FUNCTION*/] = 5/*effect_note_exec_fm*/;
 function effect_note_exec_fm(effect, note, notestate) local(freq, phase, modfreq, amp) (
 	state = effect + fx_list_headerlength;
 
-	amp = max(0, min(0.99, notestate[0/*FM_NOTE_STATE:AMP*/]));
-	freq = exp(note[0/*NOTE:LOG_FREQ*/]);
+	amp = notestate[0/*FM_NOTE_STATE:AMP*/];
+	freq = note[0/*NOTE:FREQ*/];
 	phase = notestate[4/*FM_NOTE_STATE:PHASE*/];
 	phase += (freq*state[1/*FM_STATE:HARMONIC_CYCLES*/] + notestate[1/*FM_NOTE_STATE:OFFSET_HZ*/])*2*$pi*invsrate;
 	modfreq = freq*state[0/*FM_STATE:HARMONIC_CENTER*/]*(1 + sin(phase)*amp);
-	debug.modfreq = modfreq;
-	debug.offset_hz = notestate[1/*FM_NOTE_STATE:OFFSET_HZ*/];
-	note[0/*NOTE:LOG_FREQ*/] = log(modfreq);
+	note[0/*NOTE:FREQ*/] = modfreq;
 	
 	phase > $pi ? phase -= 2*$pi;
 	notestate[4/*FM_NOTE_STATE:PHASE*/] = phase;
@@ -1465,15 +1458,19 @@ while (midirecv(midi_offset, midi_msg1, midi_msg23)) (
 	midi_msg3 = midi_msg23>>8; // velocity / value
 	(midi_type == $x9 && midi_msg3 != 0) ? (
 		// Note on
-		debug.note_on += 1;
+		options_forceduplicaterelease ? (
+			note = notes_start;
+			while (note < notes_end) (
+				note[2/*NOTE:ACTIVE*/] && (note[4/*NOTE:NOTE*/] == midi_msg2) ? (
+					// Force release of duplicate notes
+					note[8/*NOTE:SECONDSFROMEND*/] = max(note[8/*NOTE:SECONDSFROMEND*/], -midi_offset*invsrate);
+					note[9/*NOTE:DECAYRATE*/] = 1;
+				);
+				note += notes_step;
+			);
+		);
 		note = notes_start;
 		while (note[2/*NOTE:ACTIVE*/] && note < notes_end) (
-			options_forceduplicaterelease && (note[4/*NOTE:NOTE*/] == midi_msg2) ? (
-				// Force release of duplicate notes
-				note[8/*NOTE:SECONDSFROMEND*/] = max(note[8/*NOTE:SECONDSFROMEND*/], -midi_offset*invsrate);
-				note[9/*NOTE:DECAYRATE*/] = 1;
-				debug.forcerelease = note[4/*NOTE:NOTE*/];
-			);
 			note += notes_step;
 		);
 		// Found a free slot
@@ -1486,11 +1483,11 @@ while (midirecv(midi_offset, midi_msg1, midi_msg23)) (
 			note[5/*NOTE:SECONDSFROMSTART*/] = -midi_offset*invsrate;
 			note[8/*NOTE:SECONDSFROMEND*/] = -note_maxduration - midi_offset*invsrate;
 			note[9/*NOTE:DECAYRATE*/] = 0;
-			note[11/*NOTE:LOG_FREQ_BASE*/] = log(440*pow(2, (note[4/*NOTE:NOTE*/] - 69)/12));
+			note[11/*NOTE:FREQ_BASE*/] = 440*pow(2, (note[4/*NOTE:NOTE*/] - 69)/12);
 			note[12/*NOTE:AMP_BASE*/] = volume*note[3/*NOTE:VEL*/]/127;
 			
 			// Wavetable params
-			wavetable_index = (note[11/*NOTE:LOG_FREQ_BASE*/] - log(wavetable_low))/log(wavetable_high/wavetable_low)*wavetables_count;
+			wavetable_index = log(note[11/*NOTE:FREQ_BASE*/]/wavetable_low)/log(wavetable_high/wavetable_low)*wavetables_count;
 			wavetable_index = min(wavetables_count - 1, max(0, floor(wavetable_index)));
 			note[13/*NOTE:WAVEINDEX*/] = wavetable_index; // Wavetable #0
 			note[14/*NOTE:SAMPLEPOS*/] = rand(wavetable_sampleslength);
@@ -1512,7 +1509,6 @@ while (midirecv(midi_offset, midi_msg1, midi_msg23)) (
 	) : (midi_type == $x8 || (midi_type == $x9 && midi_msg3 == 0)) ? (
 		// Note off 
 		note = notes_start;
-		debug.note_off += 1;
 		while (
 			note[2/*NOTE:ACTIVE*/] && note[10/*NOTE:CHANNEL*/] == midi_channel && note[4/*NOTE:NOTE*/] == midi_msg2 ? (
 				note[8/*NOTE:SECONDSFROMEND*/] = max(note[8/*NOTE:SECONDSFROMEND*/], -midi_offset*invsrate);
@@ -1524,7 +1520,6 @@ while (midirecv(midi_offset, midi_msg1, midi_msg23)) (
 		midi_msg2 == 121 ? (
 			reset_controllers();
 		) : midi_msg == 123 ? (
-			debug.stopallnotes += 1;
 			note = notes_start;
 			while (note < notes_end) (
 				note[2/*NOTE:ACTIVE*/] ? (
@@ -1559,10 +1554,11 @@ while (
 note = notes_start;
 while (
 	note[2/*NOTE:ACTIVE*/] ? (
-		note[5/*NOTE:SECONDSFROMSTART*/] > 0 ? (
-			secondsFromStart = note[5/*NOTE:SECONDSFROMSTART*/];
-			secondsFromEnd = note[8/*NOTE:SECONDSFROMEND*/];
-			note[0/*NOTE:LOG_FREQ*/] = note[11/*NOTE:LOG_FREQ_BASE*/];
+		secondsFromStart = note[5/*NOTE:SECONDSFROMSTART*/];
+		secondsFromEnd = note[8/*NOTE:SECONDSFROMEND*/];
+
+		secondsFromStart > 0 ? (
+			note[0/*NOTE:FREQ*/] = note[11/*NOTE:FREQ_BASE*/];
 			note[1/*NOTE:AMP*/] = note[12/*NOTE:AMP_BASE*/];
 
 			// Sample from waveforms
@@ -1613,7 +1609,7 @@ while (
 				);
 			);
 			note[15/*NOTE:ENV*/] = env;
-			
+
 			// FX note parameter reset
 			i = 0;
 			while (i < fx_list_count) (
@@ -1637,24 +1633,23 @@ while (
 
 			// Increment position using frequency
 			wavetable_freq = wavetable[0/*WAVETABLE:FREQ*/];
-			freqRatio = exp(note[0/*NOTE:LOG_FREQ*/])/wavetable_freq;
+			freqRatio = note[0/*NOTE:FREQ*/]/wavetable_freq;
 
 			midsample += freqRatio;
-			midsample > wavetable_sampleslength ? while (
+			while (midsample < 0) (
+				midsample += wavetable_sampleslength;
+			);
+			while (midsample > wavetable_sampleslength) (
 				midsample -= wavetable_sampleslength;
-				midsample > wavetable_sampleslength;
 			);
 			note[14/*NOTE:SAMPLEPOS*/] = midsample;
 			
 			spl0 += note[6/*NOTE:AUDIO_LEFT*/]*note[1/*NOTE:AMP*/]*env;
 			spl1 += note[7/*NOTE:AUDIO_RIGHT*/]*note[1/*NOTE:AMP*/]*env;
 		);
-		
-		debug.decayrate = note[9/*NOTE:DECAYRATE*/];
 
 		note[5/*NOTE:SECONDSFROMSTART*/] += invsrate;
 		secondsFromEnd >= 0 ? (
-			debug.secondsFromEnd = secondsFromEnd;
 			note[9/*NOTE:DECAYRATE*/] = max(1 - controller_values[64], note[9/*NOTE:DECAYRATE*/]);
 			note[8/*NOTE:SECONDSFROMEND*/] += invsrate*note[9/*NOTE:DECAYRATE*/];
 		) : (
