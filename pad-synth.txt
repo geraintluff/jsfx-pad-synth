@@ -904,6 +904,153 @@ function effect_note_exec_conmod(effect, note, notestate) local(source, value, t
 	);
 );
 
+//////////////// Distortion ////////////////
+
+DIST_NOTE_STATE## > note_fx_statelength ? ui_error("note state too small for distortion");
+DIST_STATE## > fx_list_statelength ? ui_error("effect state too small for distortion");
+effectspec = fx_spec_start + fx_spec_step*FX_SPECLIST_INDEX#DISTORTION(3);
+effectspec[FX_HEADER#NAME] = "Distortion";
+effectspec[FX_HEADER#MODCOUNT] = 1;
+modspec = effectspec + fx_spec_headerlength + fx_spec_modlength*DIST_NOTE_STATE#WET(0);
+modspec[FX_MOD#NAME] = "Wet";
+modspec[FX_MOD#TYPE] = FX_MODTYPE#MULT;
+modspec[FX_MOD#RANGE] = 1;
+
+effectspec[FX_HEADER#FUNC_INIT] = {effect_init}effect_init_dist;
+function effect_init_dist(effect) local(state) (
+	effect[FX#NAME] = "Distortion";
+	state = effect + fx_list_headerlength;
+
+	state[DIST_STATE#LIMIT_LOG(0)] = log(0.25);
+	state[DIST_STATE#CURVE(1)] = DIST_CURVE#TANH(0);
+	state[DIST_STATE#ASYMMETRY(2)] = 0;
+	state[DIST_STATE#POST_AMP_LOG(3)] = 0;
+	state[DIST_STATE#WET(4)] = 0.75;
+);
+effectspec[FX_HEADER#CONFIG_UI_FUNCTION] = {config_ui}effect_ui_dist;
+function effect_ui_dist(effect) local(state, effect_index, mod_range, i, value, preGain, postGain, asymmetry, tanh_asymmetry) (
+	effect_index = (effect - fx_list_start)/fx_list_step;
+	state = effect + fx_list_headerlength;
+
+	ui_split_top(ui_texth() + ui_hpadding()*3);
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_align(1, -1);
+				ui_padright();
+				ui_text("limit");
+			ui_pop();
+			ui_split_rightratio(0.2);
+				ui_padleft();
+				ui_align(0, -1);
+				ui_textnumber(state[DIST_STATE#LIMIT_LOG]*20/log(10), "%0.1fdB");
+			ui_pop();
+			state[DIST_STATE#LIMIT_LOG] = control_hslider(state[DIST_STATE#LIMIT_LOG], -4, 0, -1);
+		ui_pop();
+	ui_split_next();
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_align(1, -1);
+				ui_padright();
+				ui_text("asymmetry");
+			ui_pop();
+			ui_split_rightratio(0.2);
+				ui_padleft();
+				ui_align(0, -1);
+				ui_textnumber(tanh(state[DIST_STATE#ASYMMETRY])*100, "%i%%");
+			ui_pop();
+			state[DIST_STATE#ASYMMETRY] = control_hslider(state[DIST_STATE#ASYMMETRY], 0, 3, 3);
+		ui_pop();
+	ui_split_next();
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_align(1, -1);
+				ui_padright();
+				ui_text("post-amp");
+			ui_pop();
+			ui_split_rightratio(0.2);
+				ui_padleft();
+				ui_align(0, -1);
+				ui_textnumber(state[DIST_STATE#POST_AMP_LOG]*20/log(10), "%0.1fdB");
+			ui_pop();
+			state[DIST_STATE#POST_AMP_LOG] = control_hslider(state[DIST_STATE#POST_AMP_LOG], 0, 2, 0);
+		ui_pop();
+	ui_split_next();
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_align(1, -1);
+				ui_padright();
+				ui_text("wet");
+			ui_pop();
+			ui_split_rightratio(0.2);
+				ui_padleft();
+				ui_align(0, -1);
+				ui_textnumber(state[DIST_STATE#WET]*100, "%i%%");
+			ui_pop();
+			state[DIST_STATE#WET] = control_hslider(state[DIST_STATE#WET], 0, 1, 0);
+		ui_pop();
+	ui_pop();
+	
+	ui_color(0, 0, 0);
+	ui_fill();
+	ui_colora(255, 255, 255, 0.5);
+	gfx_line(ui_left(), ui_top() + ui_height()/2, ui_right(), ui_top() + ui_height()/2);
+	
+	preGain = exp(-state[DIST_STATE#LIMIT_LOG]);
+	postGain = exp(state[DIST_STATE#POST_AMP_LOG] + state[DIST_STATE#LIMIT_LOG]);
+	asymmetry = state[DIST_STATE#ASYMMETRY];
+	tanh_asymmetry = tanh(asymmetry);
+
+	ui_color(128, 192, 256);
+	i = 1;
+	gfx_x = ui_left();
+	value = -1;
+	value += (postGain*(tanh(preGain*-1 + asymmetry) - tanh_asymmetry) - value)*state[DIST_STATE#WET];
+	value = max(-1, min(1, value));
+	gfx_y = ui_bottom() - (1 + value)*0.5*ui_height();
+	while (i <= 1000) (
+		value = (i/1000)*2 - 1;
+		value += (postGain*(tanh(preGain*value + asymmetry) - tanh_asymmetry) - value)*state[DIST_STATE#WET];
+		value = max(-1, min(1, value));
+		gfx_lineto(ui_left() + (i/1000)*ui_width(), ui_bottom() - (1 + value)*0.5*ui_height());
+		i += 1;
+	);
+	control_finish_enabled(1);
+);
+effectspec[FX_HEADER#CONFIG_SWAP_FUNCTION] = 0;
+effectspec[FX_HEADER#CONFIG_DELETE_FUNCTION] = 0;
+effectspec[FX_HEADER#SETUP_NOTE_FUNCTION] = {note_setup}effect_note_setup_dist;
+function effect_note_setup_dist(effect, note, notestate) local(state) (
+	state = effect + fx_list_headerlength;
+);
+effectspec[FX_HEADER#PRE_EXEC_NOTE_FUNCTION] = {note_pre_exec}effect_note_pre_exec_dist;
+function effect_note_pre_exec_dist(effect, note, notestate) (
+	state = effect + fx_list_headerlength;
+	notestate[DIST_NOTE_STATE#WET] = state[DIST_STATE#WET];
+);
+effectspec[FX_HEADER#EXEC_NOTE_FUNCTION] = {note_exec}effect_note_exec_dist;
+function effect_note_exec_dist(effect, note, notestate) local(asymmetry, tanh_asymmetry, wet, preGain, postGain) (
+	state = effect + fx_list_headerlength;
+
+	preGain = exp(-state[DIST_STATE#LIMIT_LOG]);
+	postGain = exp(state[DIST_STATE#POST_AMP_LOG] + state[DIST_STATE#LIMIT_LOG]);
+	debug.preGain = preGain;
+	debug.postGain = postGain;
+	debug.bothGain = preGain*postGain;
+
+	wet = min(1, notestate[DIST_NOTE_STATE#WET]);
+	asymmetry = state[DIST_STATE#ASYMMETRY];
+	debug.asymmetry = asymmetry;
+	asymmetry ? (
+		tanh_asymmetry = tanh(asymmetry);
+		debug.tanh_asymmetry = tanh_asymmetry;
+		note[NOTE#AUDIO_LEFT] += (postGain*(tanh(preGain*note[NOTE#AUDIO_LEFT] + asymmetry) - tanh_asymmetry) - note[NOTE#AUDIO_LEFT])*wet;
+		note[NOTE#AUDIO_RIGHT] += (postGain*(tanh(preGain*note[NOTE#AUDIO_RIGHT] + asymmetry) - tanh_asymmetry) - note[NOTE#AUDIO_RIGHT])*wet;
+	) : (
+		note[NOTE#AUDIO_LEFT] += (postGain*tanh(preGain*note[NOTE#AUDIO_LEFT]) - note[NOTE#AUDIO_LEFT])*wet;
+		note[NOTE#AUDIO_RIGHT] += (postGain*tanh(preGain*note[NOTE#AUDIO_RIGHT]) - note[NOTE#AUDIO_RIGHT])*wet;
+	);
+);
+
 //////////////// Effect Manipulation ////////////////
 
 function {effect_init}(effect_slot);
