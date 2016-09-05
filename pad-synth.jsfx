@@ -224,12 +224,12 @@ function reset_controllers() (
 		(i == 7 || i == 10 || (i >= 91 && i <= 95) || (i >= 70 && i <= 79) || i >= 120) ? (
 			controller_values[i] = controller_values[i];
 		) : (i >= 98 && i <= 101) ? (
-			controller_values[i] = 127;
+			controller_values[i] = 1;
 		) : (i != 0 && i != 32) ? (
 			controller_values[i] = 0;
 		);
 	);
-	controller_values[11] = 128;
+	controller_values[11] = 1;
 );
 function get_controller_name(index) (
 	index == -2 ? (
@@ -724,7 +724,7 @@ function effect_ui_conmod(effect) local(state, effect_index, mod_range, source, 
 	state = effect + fx_list_headerlength;
 
 	mod_range = get_mod_range(state[0/*CONMOD_STATE:MOD_EFFECT*/], state[1/*CONMOD_STATE:MOD_INDEX*/]);
-	ui_split_topratio(1/6);
+	ui_split_topratio(1/9);
 		ui_push_heighttext(-1);
 			ui_split_leftratio(0.2);
 				ui_align(1, -1);
