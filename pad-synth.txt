@@ -172,7 +172,7 @@ function get_mod_range(effectIndex, modIndex) local(target_effect, target_spec, 
 function get_mod_type(effectIndex, modIndex) local(target_effect, target_mod) (
 	effectIndex < 0 ? (
 		modIndex == 0 ? (
-			FX_MODTYPE#ADD;
+			FX_MODTYPE#MULT;
 		) : (
 			FX_MODTYPE#MULT;
 		);
@@ -187,7 +187,7 @@ function get_mod_type(effectIndex, modIndex) local(target_effect, target_mod) (
 function get_mod_index(effectIndex, modIndex) (
 	effectIndex < 0 ? (
 		modIndex == 0 ? (
-			NOTE#LOG_FREQ;
+			NOTE#FREQ;
 		) : (
 			NOTE#AMP;
 		);
@@ -1036,16 +1036,11 @@ function effect_note_exec_dist(effect, note, notestate) local(asymmetry, tanh_as
 
 	preGain = exp(-state[DIST_STATE#LIMIT_LOG]);
 	postGain = exp(state[DIST_STATE#POST_AMP_LOG] + state[DIST_STATE#LIMIT_LOG]);
-	debug.preGain = preGain;
-	debug.postGain = postGain;
-	debug.bothGain = preGain*postGain;
 
 	wet = min(1, notestate[DIST_NOTE_STATE#WET]);
 	asymmetry = state[DIST_STATE#ASYMMETRY];
-	debug.asymmetry = asymmetry;
 	asymmetry ? (
 		tanh_asymmetry = tanh(asymmetry);
-		debug.tanh_asymmetry = tanh_asymmetry;
 		note[NOTE#AUDIO_LEFT] += (postGain*(tanh(preGain*note[NOTE#AUDIO_LEFT] + asymmetry) - tanh_asymmetry) - note[NOTE#AUDIO_LEFT])*wet;
 		note[NOTE#AUDIO_RIGHT] += (postGain*(tanh(preGain*note[NOTE#AUDIO_RIGHT] + asymmetry) - tanh_asymmetry) - note[NOTE#AUDIO_RIGHT])*wet;
 	) : (
@@ -1127,7 +1122,7 @@ function effect_ui_fm(effect) local(state, effect_index, mod_range) (
 				ui_align(0, -1);
 				ui_textnumber(state[FM_STATE#AMP]*100, "%i%%");
 			ui_pop();
-			state[FM_STATE#AMP] = control_hslider(state[FM_STATE#AMP], 0, 1, 0);
+			state[FM_STATE#AMP] = control_hslider(state[FM_STATE#AMP], 0, 5, 0);
 		ui_pop();
 	ui_split_next();
 		ui_push_heighttext(-1);
@@ -1167,14 +1162,12 @@ effectspec[FX_HEADER#EXEC_NOTE_FUNCTION] = {note_exec}effect_note_exec_fm;
 function effect_note_exec_fm(effect, note, notestate) local(freq, phase, modfreq, amp) (
 	state = effect + fx_list_headerlength;
 
-	amp = max(0, min(0.99, notestate[FM_NOTE_STATE#AMP]));
-	freq = exp(note[NOTE#LOG_FREQ]);
+	amp = notestate[FM_NOTE_STATE#AMP];
+	freq = note[NOTE#FREQ];
 	phase = notestate[FM_NOTE_STATE#PHASE];
 	phase += (freq*state[FM_STATE#HARMONIC_CYCLES] + notestate[FM_NOTE_STATE#OFFSET_HZ])*2*$pi*invsrate;
 	modfreq = freq*state[FM_STATE#HARMONIC_CENTER]*(1 + sin(phase)*amp);
-	debug.modfreq = modfreq;
-	debug.offset_hz = notestate[FM_NOTE_STATE#OFFSET_HZ];
-	note[NOTE#LOG_FREQ] = log(modfreq);
+	note[NOTE#FREQ] = modfreq;
 	
 	phase > $pi ? phase -= 2*$pi;
 	notestate[FM_NOTE_STATE#PHASE] = phase;
@@ -1416,15 +1409,19 @@ while (midirecv(midi_offset, midi_msg1, midi_msg23)) (
 	midi_msg3 = midi_msg23>>8; // velocity / value
 	(midi_type == $x9 && midi_msg3 != 0) ? (
 		// Note on
-		debug.note_on += 1;
+		options_forceduplicaterelease ? (
+			note = notes_start;
+			while (note < notes_end) (
+				note[NOTE#ACTIVE] && (note[NOTE#NOTE] == midi_msg2) ? (
+					// Force release of duplicate notes
+					note[NOTE#SECONDSFROMEND] = max(note[NOTE#SECONDSFROMEND], -midi_offset*invsrate);
+					note[NOTE#DECAYRATE] = 1;
+				);
+				note += notes_step;
+			);
+		);
 		note = notes_start;
 		while (note[NOTE#ACTIVE] && note < notes_end) (
-			options_forceduplicaterelease && (note[NOTE#NOTE] == midi_msg2) ? (
-				// Force release of duplicate notes
-				note[NOTE#SECONDSFROMEND] = max(note[NOTE#SECONDSFROMEND], -midi_offset*invsrate);
-				note[NOTE#DECAYRATE] = 1;
-				debug.forcerelease = note[NOTE#NOTE];
-			);
 			note += notes_step;
 		);
 		// Found a free slot
@@ -1437,11 +1434,11 @@ while (midirecv(midi_offset, midi_msg1, midi_msg23)) (
 			note[NOTE#SECONDSFROMSTART] = -midi_offset*invsrate;
 			note[NOTE#SECONDSFROMEND] = -note_maxduration - midi_offset*invsrate;
 			note[NOTE#DECAYRATE] = 0;
-			note[NOTE#LOG_FREQ_BASE] = log(440*pow(2, (note[NOTE#NOTE] - 69)/12));
+			note[NOTE#FREQ_BASE] = 440*pow(2, (note[NOTE#NOTE] - 69)/12);
 			note[NOTE#AMP_BASE] = volume*note[NOTE#VEL]/127;
 			
 			// Wavetable params
-			wavetable_index = (note[NOTE#LOG_FREQ_BASE] - log(wavetable_low))/log(wavetable_high/wavetable_low)*wavetables_count;
+			wavetable_index = log(note[NOTE#FREQ_BASE]/wavetable_low)/log(wavetable_high/wavetable_low)*wavetables_count;
 			wavetable_index = min(wavetables_count - 1, max(0, floor(wavetable_index)));
 			note[NOTE#WAVEINDEX] = wavetable_index; // Wavetable #0
 			note[NOTE#SAMPLEPOS] = rand(wavetable_sampleslength);
@@ -1463,7 +1460,6 @@ while (midirecv(midi_offset, midi_msg1, midi_msg23)) (
 	) : (midi_type == $x8 || (midi_type == $x9 && midi_msg3 == 0)) ? (
 		// Note off 
 		note = notes_start;
-		debug.note_off += 1;
 		while (
 			note[NOTE#ACTIVE] && note[NOTE#CHANNEL] == midi_channel && note[NOTE#NOTE] == midi_msg2 ? (
 				note[NOTE#SECONDSFROMEND] = max(note[NOTE#SECONDSFROMEND], -midi_offset*invsrate);
@@ -1475,7 +1471,6 @@ while (midirecv(midi_offset, midi_msg1, midi_msg23)) (
 		midi_msg2 == 121 ? (
 			reset_controllers();
 		) : midi_msg == 123 ? (
-			debug.stopallnotes += 1;
 			note = notes_start;
 			while (note < notes_end) (
 				note[NOTE#ACTIVE] ? (
@@ -1510,10 +1505,11 @@ while (
 note = notes_start;
 while (
 	note[NOTE#ACTIVE] ? (
-		note[NOTE#SECONDSFROMSTART] > 0 ? (
-			secondsFromStart = note[NOTE#SECONDSFROMSTART];
-			secondsFromEnd = note[NOTE#SECONDSFROMEND];
-			note[NOTE#LOG_FREQ] = note[NOTE#LOG_FREQ_BASE];
+		secondsFromStart = note[NOTE#SECONDSFROMSTART];
+		secondsFromEnd = note[NOTE#SECONDSFROMEND];
+
+		secondsFromStart > 0 ? (
+			note[NOTE#FREQ] = note[NOTE#FREQ_BASE];
 			note[NOTE#AMP] = note[NOTE#AMP_BASE];
 
 			// Sample from waveforms
@@ -1564,7 +1560,7 @@ while (
 				);
 			);
 			note[NOTE#ENV] = env;
-			
+
 			// FX note parameter reset
 			i = 0;
 			while (i < fx_list_count) (
@@ -1588,24 +1584,23 @@ while (
 
 			// Increment position using frequency
 			wavetable_freq = wavetable[WAVETABLE#FREQ];
-			freqRatio = exp(note[NOTE#LOG_FREQ])/wavetable_freq;
+			freqRatio = note[NOTE#FREQ]/wavetable_freq;
 
 			midsample += freqRatio;
-			midsample > wavetable_sampleslength ? while (
+			while (midsample < 0) (
+				midsample += wavetable_sampleslength;
+			);
+			while (midsample > wavetable_sampleslength) (
 				midsample -= wavetable_sampleslength;
-				midsample > wavetable_sampleslength;
 			);
 			note[NOTE#SAMPLEPOS] = midsample;
 			
 			spl0 += note[NOTE#AUDIO_LEFT]*note[NOTE#AMP]*env;
 			spl1 += note[NOTE#AUDIO_RIGHT]*note[NOTE#AMP]*env;
 		);
-		
-		debug.decayrate = note[NOTE#DECAYRATE];
 
 		note[NOTE#SECONDSFROMSTART] += invsrate;
 		secondsFromEnd >= 0 ? (
-			debug.secondsFromEnd = secondsFromEnd;
 			note[NOTE#DECAYRATE] = max(1 - controller_values[64], note[NOTE#DECAYRATE]);
 			note[NOTE#SECONDSFROMEND] += invsrate*note[NOTE#DECAYRATE];
 		) : (
