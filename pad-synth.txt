@@ -1,3 +1,6 @@
+// PadSynth v1.0.0
+// by Geraint Luff
+
 desc:PadSynth
 in_pin:none;
 out_pin:Left
