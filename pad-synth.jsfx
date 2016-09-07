@@ -9,6 +9,7 @@ import ui-lib.jsfx-inc
 @init
 
 options_forceduplicaterelease = 1;
+options_generate_midside = 1;
 
 //////////////// Setup and Memory Layout ////////////////
 
@@ -1362,7 +1363,6 @@ recompute_index < wavetables_count ? (
 		
 		harmonic_range_factor = exp(param_width*2);
 		i = 1;
-		phase_offset = $pi/4;
 		while (
 			power = 0;
 			indexfreq = i/wavetable_sampleslength*wavetable_refsrate;
@@ -1383,27 +1383,13 @@ recompute_index < wavetables_count ? (
 			);
 			amp = sqrt(power);
 			phase1 = rand(2*$pi);
-			// Attempt to even out the mid-channel energy while still making the two channels uncorrelated
-			phase_offset += (rand() < 0.5) ? $pi/2 : -$pi/2;
-			phase2 = phase1 + phase_offset;
-			//phase2 = rand(2*$pi);
+			phase2 = rand(2*$pi);
 	
 			leftR = amp*cos(phase1);
 			leftI = amp*sin(phase1);
 			rightR = amp*cos(phase2);
 			rightI = amp*sin(phase2);
 			
-			1 ? ( // Mid/side decode
-				mid = leftR;
-				side = rightR;
-				leftR = mid - side;
-				rightR = mid + side;
-				mid = leftI;
-				side = rightI;
-				leftI = mid - side;
-				rightI = mid + side;
-			);
-
 			i2 = wavetable_sampleslength - i;
 			fftblock[2*i] = leftR - rightI;
 			fftblock[2*i + 1] = leftI + rightR;
@@ -1418,17 +1404,22 @@ recompute_index < wavetables_count ? (
 		fft_ipermute(fftblock, 32768);
 		ifft(fftblock, 32768);
 
-		// Normalise
+		// Normalise two channels separately
 		sum2 = 0;
-		maxabs = 0;
 		i = 0;
-		while (
-			sum2 += fftblock[i]*fftblock[i];
-			maxabs = max(maxabs, abs(fftblock[i]));
+		while (i < wavetable_sampleslength) (
+			sum2 += fftblock[2*i]*fftblock[2*i];
 			i += 1;
-			i < wavetable_sampleslength*2;
 		);
-		factor = 0.25/sqrt(sum2/(2*wavetable_sampleslength));
+		factor1 = 0.25/sqrt(sum2/wavetable_sampleslength);
+
+		sum2 = 0;
+		i = 0;
+		while (i < wavetable_sampleslength) (
+			sum2 += fftblock[2*i + 1]*fftblock[2*i + 1];
+			i += 1;
+		);
+		factor2 = 0.25/sqrt(sum2/wavetable_sampleslength);
 
 		// Place in wavetable
 		wavetable = wavetables_start + wavetable_step*wavetable_index;
@@ -1436,10 +1427,18 @@ recompute_index < wavetables_count ? (
 		wavetable_samples = wavetable + wavetable_headerlength;
 		assignedwavetable = wavetable;
 		i = 0;
-		while (
-			wavetable_samples[i] = fftblock[i]*factor;
+		while (i < wavetable_sampleslength) (
+			left = fftblock[2*i]*factor1;
+			right = fftblock[2*i + 1]*factor2;
+			options_generate_midside ? (
+				mid = left/sqrt(2);
+				side = right/sqrt(2);
+				left = mid + side;
+				right = mid - side;
+			);
+			wavetable_samples[2*i] = left;
+			wavetable_samples[2*i + 1] = right;
 			i += 1;
-			i < wavetable_sampleslength*2;
 		);
 		
 		wavetable_index += 1;

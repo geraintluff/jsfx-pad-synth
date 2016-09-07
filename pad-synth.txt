@@ -10,6 +10,9 @@ import ui-lib.jsfx-inc
 
 options_forceduplicaterelease = 1;
 options_generate_midside = 1;
+options_wavetables_count = 18;
+options_wavetables_sampleslength = 32768;
+options_polyphony = 64;
 
 //////////////// Setup and Memory Layout ////////////////
 
@@ -17,7 +20,7 @@ options_generate_midside = 1;
 // action_recompute = 0;
 // recompute_index - zero initially;
 recompute_chunk = 1; // Recompute at most one waveform per block, so that we don't freeze the UI completely
-polyphony = 64;
+polyphony = options_polyphony;
 invsrate = 1/srate;
 
 function get_waveform_name(index) (
@@ -126,7 +129,100 @@ function get_waveform_spectrum_amp(n) local(sum) (
 );
 
 fftblock = 0;
-fftblock_end = 65536;
+fft_big_working_space = fftblock + options_wavetables_sampleslength*2;
+fftblock_end = fft_big_working_space + 256;
+
+// working_space must be 2*sizeB big
+function ifft_ab(block, sizeA, sizeB, working_space)
+		local(N, i, j, twiddle_amount, twiddle_r, twiddle_i, Nbits, shiftleftbits, shiftrightbits, bitmask, index1, source_index, target_index, bitmask, tmp_r, tmp_i)
+		(
+	debug.sizeA = sizeA;
+	debug.sizeB = sizeB;
+	N = sizeA*sizeB;
+
+	// Permute
+	Nbits = 1;
+	while ((1<<Nbits) < N) (
+		Nbits += 1;
+	);
+	shiftleftbits = 1; // This is the shift required to find the source index for a given target
+	bitmask = N - 1;
+	while ((1<<shiftleftbits) < sizeB) ( // NOTE: the FFT uses sizeA, the IFFT uses sizeB (inverse shift)
+		shiftleftbits += 1;
+	);
+	shiftrightbits = Nbits - shiftleftbits;
+	
+	index1 = 1; // Source index
+	while (index1 < N) (
+		target_index = index1;
+		while (
+			target_index = ((target_index<<shiftleftbits)&bitmask) + (target_index>>shiftrightbits);
+			target_index > index1;
+		);
+		target_index == index1 ? ( // This index is the shortest in its permutation group
+			tmp_r = block[target_index*2];
+			tmp_i = block[target_index*2 + 1];
+			source_index = ((target_index<<shiftleftbits)&bitmask) + (target_index>>shiftrightbits);
+			while (source_index != index1) (
+				block[target_index*2] = block[source_index*2];
+				block[target_index*2 + 1] = block[source_index*2 + 1];
+				target_index = source_index;
+				source_index = ((target_index<<shiftleftbits)&bitmask) + (target_index>>shiftrightbits);
+			);
+			block[target_index*2] = tmp_r;
+			block[target_index*2 + 1] = tmp_i;
+		);
+		index1 += 1;
+	);
+
+	// Perform the in-place IFFTs
+	j = 0;
+	while (j < sizeB) (
+		fft_ipermute(block + j*sizeA*2, sizeA);
+		ifft(block + j*sizeA*2, sizeA);
+		j += 1;
+	);
+
+	i = 0;
+	// Perform the stepwise IFFTs
+	while (i < sizeA) (
+		j = 0;
+		// Copy to working area, with anti-twiddle factors
+		while (j < sizeB) (
+			twiddle_amount = i*j/N;
+			twiddle_r = cos(twiddle_amount*2*$pi);
+			twiddle_i = sin(twiddle_amount*2*$pi);
+			
+			working_space[j*2] = block[(i + j*sizeA)*2]*twiddle_r - block[(i + j*sizeA)*2 + 1]*twiddle_i;
+			working_space[j*2 + 1] = block[(i + j*sizeA)*2]*twiddle_i + block[(i + j*sizeA)*2 + 1]*twiddle_r;
+			j += 1;
+		);
+		fft_ipermute(working_space, sizeB);
+		ifft(working_space, sizeB);
+		j = 0;
+		while (j < sizeB) (
+			block[(i + j*sizeA)*2] = working_space[j*2];
+			block[(i + j*sizeA)*2 + 1] = working_space[j*2 + 1];
+			j += 1;
+		);
+
+		i += 1;
+	); 
+);
+
+function ifft_big(block, N, working_space) local(sizeB) (
+	debug.ifft_big += 1;
+	debug.N = N;
+	N > 32768 ? (
+		sizeB = 1<<7;
+		(N/sizeB) > 32768 ? sizeB = 1<<11;
+		(N/sizeB) > 32768 ? sizeB = 1<<13;
+		ifft_ab(block, N/sizeB, sizeB, working_space);
+	) : (
+		fft_ipermute(block, N);
+		ifft(block, N);
+	);
+);
 
 gen_spectrum_N = 1024;
 gen_spectrum = fftblock_end;
@@ -286,8 +382,8 @@ function clear_all_notes() local(note) (
 clear_all_notes();
 
 wavetables_start = notes_end;
-wavetables_count = 18;
-wavetable_sampleslength = 32768;
+wavetables_count = options_wavetables_count;
+wavetable_sampleslength = options_wavetables_sampleslength;
 wavetable_headerlength = WAVETABLE##; // Freq
 wavetable_step = wavetable_headerlength + wavetable_sampleslength*2;
 wavetables_end = wavetables_start + wavetables_count*wavetable_step;
@@ -1352,8 +1448,8 @@ recompute_index < wavetables_count ? (
 		);
 		
 		// IFFT
-		fft_ipermute(fftblock, 32768);
-		ifft(fftblock, 32768);
+
+		ifft_big(fftblock, wavetable_sampleslength, fft_big_working_space);
 
 		// Normalise two channels separately
 		sum2 = 0;
