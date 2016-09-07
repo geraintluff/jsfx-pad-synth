@@ -8,10 +8,16 @@ import ui-lib.jsfx-inc
 
 @init
 
+// Configuration options:
+// 	Feel free to change these, but you'll need to do a complete reset afterwards
+// 	because many of them affect the memory layout.
 options_forceduplicaterelease = 1;
 options_generate_midside = 1;
-options_wavetables_count = 18;
-options_wavetables_sampleslength = 32768;
+options_wavetables_lowfreq = 50;
+options_wavetables_highfreq = 4000;
+options_wavetables_count = 18; // This is about one sample per 5 semitones
+options_wavetables_samplerate = 48000; // Samples are rendered at this frequency regardless of project sample rate
+options_wavetables_sampleslength = 65536; // Keeps the repetition just over a second - must be power of 2
 options_polyphony = 64;
 
 //////////////// Setup and Memory Layout ////////////////
@@ -132,12 +138,11 @@ fftblock = 0;
 fft_big_working_space = fftblock + options_wavetables_sampleslength*2;
 fftblock_end = fft_big_working_space + 256;
 
-// working_space must be 2*sizeB big
+// This factorises (Cooley-Tukey) a large FFT into smaller FFTs to get around REAPER's 32768 limit.
+// "working_space" must be 2*sizeB big - if you're using fft_big()
 function ifft_ab(block, sizeA, sizeB, working_space)
 		local(N, i, j, twiddle_amount, twiddle_r, twiddle_i, Nbits, shiftleftbits, shiftrightbits, bitmask, index1, source_index, target_index, bitmask, tmp_r, tmp_i)
 		(
-	debug.sizeA = sizeA;
-	debug.sizeB = sizeB;
 	N = sizeA*sizeB;
 
 	// Permute
@@ -152,7 +157,7 @@ function ifft_ab(block, sizeA, sizeB, working_space)
 	);
 	shiftrightbits = Nbits - shiftleftbits;
 	
-	index1 = 1; // Source index
+	index1 = 1;
 	while (index1 < N) (
 		target_index = index1;
 		while (
@@ -210,9 +215,9 @@ function ifft_ab(block, sizeA, sizeB, working_space)
 	); 
 );
 
+// working_space must be 256 big (128 complex numbers), unless you're doing super-duper large (2^21 or higher) FFTs
+// block and working space should not cross a 65536-boundary (well, depends on the actual size, but it's a good policy)
 function ifft_big(block, N, working_space) local(sizeB) (
-	debug.ifft_big += 1;
-	debug.N = N;
 	N > 32768 ? (
 		sizeB = 1<<7;
 		(N/sizeB) > 32768 ? sizeB = 1<<11;
@@ -395,10 +400,10 @@ volume = pow(10, volume_db/20);
 note_maxduration = 60*60*24*365;
 
 wavetable_maxfreq = 18000;
-wavetable_refsrate = 48000;
+wavetable_refsrate = options_wavetables_samplerate;
 // 6+ octaves, centred on 440
-wavetable_low = 50;
-wavetable_high = 4000;
+wavetable_low = options_wavetables_lowfreq;
+wavetable_high = options_wavetables_highfreq;
 
 //////////////// LFO ////////////////
 
@@ -1819,7 +1824,7 @@ ui_screen() == "main" ? (
 	ui_pad();
 
 	ui_align(0.5, 0.67);
-	text_height = ui_wraptext("This is a JSFX implementation of the 'padsynth' algorithm from ZynAddSubFX, which I love but hasn\'t been updated in a while.  It\'s not an exact replacement, but I\'m adding features as I need them.\n\nIt\'s a sample-based synth, where the samples are designed in the frequency domain (which allows customised harmonic spread) and then generated using an inverse FFT.\n\nThe GUI for this synth uses a JSFX UI library originally written for this synth, but is now a project of its own.");
+	text_height = ui_wraptext("This is a JSFX synth based on the 'padsynth' algorithm from ZynAddSubFX, which I love.  It has a focus on flexible per-note effects and modulation, and I\'m adding features as I need them.\n\nIt\'s a sample-based synth, where the samples are designed in the frequency domain (which allows customised harmonic spread) and then generated using an inverse FFT.\n\nThe GUI for this synth uses a JSFX UI library originally written for this synth, but is now a project of its own.\n\nhttps://github.com/geraintluff/jsfx-pad-synth\nhttps://github.com/geraintluff/jsfx-ui-lib");
 	
 	ui_push_above(text_height);
 		ui_align(0.5, 0.5);
