@@ -623,10 +623,9 @@ function effect_init_filter(effect) local(state) (
 	state[FILTER_STATE#ATTACK_AMOUNT(2)] = 0;
 	state[FILTER_STATE#ATTACK_TIME(3)] = 0.1;
 
-	// Private state
-	state[FILTER_STATE#ATTACK_AMOUNT_VELOCITY] = log(10);
-	state[FILTER_STATE#FREQ_LOG_VELOCITY] = log(5);
-	state[FILTER_STATE#FREQ_LOG_NOTE] = 0.5;
+	state[FILTER_STATE#ATTACK_AMOUNT_VELOCITY(4)] = log(10);
+	state[FILTER_STATE#FREQ_LOG_VELOCITY(5)] = log(5);
+	state[FILTER_STATE#FREQ_LOG_NOTE(6)] = 0.5;
 );
 effectspec[FX_HEADER#CONFIG_UI_FUNCTION] = {config_ui}effect_ui_filter;
 function effect_ui_filter(effect) local(state, effect_index, mod_range) (
@@ -1287,6 +1286,198 @@ function effect_note_exec_fm(effect, note, notestate) local(freq, phase, modfreq
 	notestate[FM_NOTE_STATE#PHASE] = phase;
 );
 
+//////////////// ENVELOPE ////////////////
+
+ENV_NOTE_STATE## > note_fx_statelength ? ui_error("note state too small for envelope");
+ENV_STATE## > fx_list_statelength ? ui_error("effect state too small for envelope");
+effectspec = fx_spec_start + fx_spec_step*FX_SPECLIST_INDEX#ENVELOPE(5);
+effectspec[FX_HEADER#NAME] = "Envelope";
+effectspec[FX_HEADER#MODCOUNT] = 4;
+modspec = effectspec + fx_spec_headerlength + fx_spec_modlength*ENV_NOTE_STATE#ATTACK_VALUE(0);
+modspec[FX_MOD#NAME] = "Attack (value)";
+modspec[FX_MOD#TYPE] = FX_MODTYPE#MULT;
+modspec[FX_MOD#RANGE] = 1;
+modspec = effectspec + fx_spec_headerlength + fx_spec_modlength*ENV_NOTE_STATE#ATTACK_TIME(1);
+modspec[FX_MOD#NAME] = "Attack (time)";
+modspec[FX_MOD#TYPE] = FX_MODTYPE#MULT;
+modspec[FX_MOD#RANGE] = 1;
+modspec = effectspec + fx_spec_headerlength + fx_spec_modlength*ENV_NOTE_STATE#RELEASE_VALUE(2);
+modspec[FX_MOD#NAME] = "Release (value)";
+modspec[FX_MOD#TYPE] = FX_MODTYPE#MULT;
+modspec[FX_MOD#RANGE] = 1;
+modspec = effectspec + fx_spec_headerlength + fx_spec_modlength*ENV_NOTE_STATE#RELEASE_TIME(3);
+modspec[FX_MOD#NAME] = "Release (time)";
+modspec[FX_MOD#TYPE] = FX_MODTYPE#MULT;
+modspec[FX_MOD#RANGE] = 1;
+
+effectspec[FX_HEADER#FUNC_INIT] = {effect_init}effect_init_env;
+function effect_init_env(effect) local(state) (
+	effect[FX#NAME] = "Envelope";
+	
+	state = effect + fx_list_headerlength;
+	state[ENV_STATE#MOD_EFFECT(0)] = -1; // Initial target: note itself
+	state[ENV_STATE#MOD_INDEX(1)] = 1; // Note amplitude
+	
+	// Attack and release are expressed in the [-1,1] range
+	state[ENV_STATE#ATTACK_VALUE(2)] = -1;
+	state[ENV_STATE#ATTACK_TIME(3)] = 0.5;
+	state[ENV_STATE#RELEASE_VALUE(4)] = -1;
+	state[ENV_STATE#RELEASE_TIME(5)] = 1;
+	// This is used for the actual scale (stored per-parameter), and applied to attack/release
+	state[ENV_STATE#SCALE] = 1;
+);
+effectspec[FX_HEADER#CONFIG_UI_FUNCTION] = {config_ui}effect_ui_env;
+function effect_ui_env(effect) local(state, effect_index, mod_range) (
+	effect_index = (effect - fx_list_start)/fx_list_step;
+	state = effect + fx_list_headerlength;
+
+	ui_split_topratio(1/5);
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_align(1, -1);
+				ui_padright();
+				ui_text("Attack (value)");
+			ui_pop();
+			ui_split_rightratio(0.2);
+				ui_textnumber(state[ENV_STATE#ATTACK_VALUE], "%f");
+			ui_pop();
+			state[ENV_STATE#ATTACK_VALUE] = control_hslider(state[ENV_STATE#ATTACK_VALUE], -1, 1, 0);
+		ui_pop();
+	ui_split_next();
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_align(1, -1);
+				ui_padright();
+				ui_text("Attack (time)");
+			ui_pop();
+			ui_split_rightratio(0.2);
+				ui_padleft();
+				ui_align(0, -1);
+				ui_textnumber(state[ENV_STATE#ATTACK_TIME]*1000, "%ims");
+			ui_pop();
+			state[ENV_STATE#ATTACK_TIME] = control_hslider(state[ENV_STATE#ATTACK_TIME], 0.001, 1.5, 3);
+		ui_pop();
+	ui_split_next();
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_align(1, -1);
+				ui_padright();
+				ui_text("Release (value)");
+			ui_pop();
+			ui_split_rightratio(0.2);
+			ui_pop();
+			state[ENV_STATE#RELEASE_VALUE] = control_hslider(state[ENV_STATE#RELEASE_VALUE], -1, 1, 0);
+		ui_pop();
+	ui_split_next();
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_align(1, -1);
+				ui_padright();
+				ui_text("Release (time)");
+			ui_pop();
+			ui_split_rightratio(0.2);
+				ui_padleft();
+				ui_align(0, -1);
+				ui_textnumber(state[ENV_STATE#RELEASE_TIME]*1000, "%ims");
+			ui_pop();
+			state[ENV_STATE#RELEASE_TIME] = control_hslider(state[ENV_STATE#RELEASE_TIME], 0.01, 1.5, 3);
+		ui_pop();
+	ui_split_next();
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_align(1, -1);
+				ui_padright();
+				ui_text("target");
+			ui_pop();
+			ui_split_rightratio(0.2);
+				ui_padleft();
+				ui_padright();
+				control_button("edit") ? (
+					ui_screen_open("automation-target");
+					ui_screen_set(0, state + ENV_STATE#MOD_EFFECT);
+					ui_screen_set(1, state + ENV_STATE#MOD_INDEX);
+					ui_screen_set(2, state + ENV_STATE#SCALE);
+					ui_screen_set(3, effect_index);
+					ui_screen_set(4, 1); // Get full modulation range back
+				);
+			ui_pop();
+			ui_split_leftratio(0.6);
+				ui_padright();
+				control_readout(get_effect_name(state[ENV_STATE#MOD_EFFECT]));
+			ui_split_next();
+				control_readout(get_mod_name(state[ENV_STATE#MOD_EFFECT], state[ENV_STATE#MOD_INDEX]));
+			ui_pop();
+		ui_pop();
+	ui_pop();
+);
+effectspec[FX_HEADER#CONFIG_SWAP_FUNCTION] = {config_swap}effect_swap_env;
+function effect_swap_env(effect, fxIndex1, fxIndex2) (
+	state = effect + fx_list_headerlength;
+
+	state[ENV_STATE#MOD_EFFECT] == fxIndex1 ? (
+		state[ENV_STATE#MOD_EFFECT] = fxIndex2;
+	) : state[ENV_STATE#MOD_EFFECT] == fxIndex2 ? (
+		state[ENV_STATE#MOD_EFFECT] = fxIndex1;
+	);
+);
+effectspec[FX_HEADER#CONFIG_DELETE_FUNCTION] = {config_delete}effect_delete_env;
+function effect_delete_env(effect, fxIndex) (
+	state = effect + fx_list_headerlength;
+
+	state[ENV_STATE#MOD_EFFECT] == fxIndex ? (
+		// Our target was just deleted - reset the effect
+		effect_init_env(effect);
+		// Reset to no effect
+		state[ENV_STATE#ATTACK_VALUE] = 0;
+		state[ENV_STATE#RELEASE_VALUE] = 0;
+	);
+);
+effectspec[FX_HEADER#SETUP_NOTE_FUNCTION] = {note_setup}effect_note_setup_env;
+function effect_note_setup_env(effect, note, notestate) (
+	state = effect + fx_list_headerlength;
+	notestate[ENV_NOTE_STATE#TARGET] = get_mod_index(state[ENV_STATE#MOD_EFFECT], state[ENV_STATE#MOD_INDEX]);
+	notestate[ENV_NOTE_STATE#MODTYPE] = get_mod_type(state[ENV_STATE#MOD_EFFECT], state[ENV_STATE#MOD_INDEX]);
+	notestate[ENV_NOTE_STATE#SCALE] = state[ENV_STATE#SCALE];
+);
+effectspec[FX_HEADER#PRE_EXEC_NOTE_FUNCTION] = {note_pre_exec}effect_note_pre_exec_env;
+function effect_note_pre_exec_env(effect, note, notestate) (
+	state = effect + fx_list_headerlength;
+	
+	notestate[ENV_NOTE_STATE#ATTACK_VALUE] = state[ENV_STATE#ATTACK_VALUE];
+	notestate[ENV_NOTE_STATE#ATTACK_TIME] = state[ENV_STATE#ATTACK_TIME];
+	notestate[ENV_NOTE_STATE#RELEASE_VALUE] = state[ENV_STATE#RELEASE_VALUE];
+	notestate[ENV_NOTE_STATE#RELEASE_TIME] = state[ENV_STATE#RELEASE_TIME];
+);
+effectspec[FX_HEADER#EXEC_NOTE_FUNCTION] = {note_exec}effect_note_exec_env;
+function effect_note_exec_env(effect, note, notestate) local(ratio, value) (
+	targetIndex = notestate[ENV_NOTE_STATE#TARGET];
+	targetIndex >= 0 ? (
+		value = 0;
+		notestate[ENV_NOTE_STATE#ATTACK_TIME] ? (
+			ratio = note[NOTE#SECONDSFROMSTART]/notestate[ENV_NOTE_STATE#ATTACK_TIME];
+			ratio > 0 && ratio < 1 ? (
+				value += (1 - ratio)*notestate[ENV_NOTE_STATE#ATTACK_VALUE];
+			);
+		);
+
+		notestate[ENV_NOTE_STATE#RELEASE_TIME] ? (
+			ratio = note[NOTE#SECONDSFROMEND]/notestate[ENV_NOTE_STATE#RELEASE_TIME];
+			ratio > 0 ? (
+				value += min(1, ratio)*notestate[ENV_NOTE_STATE#RELEASE_VALUE];
+			);
+		);
+		value *= notestate[ENV_NOTE_STATE#SCALE];
+		debug.scale = notestate[ENV_NOTE_STATE#SCALE];
+		debug.value = value;
+		
+		notestate[LFO_NOTE_STATE#MODTYPE] == FX_MODTYPE#ADD ? (
+			note[targetIndex] += value;
+		) : (
+			note[targetIndex] *= max(0, 1 + value);
+		);
+	);
+);
+
 //////////////// Effect Manipulation ////////////////
 
 function {effect_init}(effect_slot);
@@ -1392,12 +1583,6 @@ function reset_to_defaults() (
 	fx_list_count = 0;
 );
 !has_set_parameters ? reset_to_defaults();
-
-srate != prev_srate ? (
-	prev_srate = srate;
-	action_recompute = 1;
-	clear_all_notes();
-);
 
 @block
 
@@ -1652,8 +1837,6 @@ while (
 			
 			granular_ratio = note[NOTE#GRANULAR_POS];
 			granular_ratio ? (
-				debug.span = note[NOTE#SAMPLEPOS_TO] - note[NOTE#SAMPLEPOS_FROM];
-
 				// Second sample value
 				midsample = note[NOTE#SAMPLEPOS_TO];
 				lowsample = floor(midsample);
@@ -2227,6 +2410,7 @@ ui_screen() == "main" ? (
 	g_arg_index = ui_screen_get(1);
 	g_arg_range = ui_screen_get(2);
 	g_arg_minIndex = ui_screen_get(3);
+	g_arg_rangemultiplier = ui_screen_get(4);
 
 	g_element_height = min(ui_texth() + ui_vpadding()*2, ui_height()/(fx_list_count + 1));
 	ui_split_top(g_element_height);
@@ -2247,6 +2431,7 @@ ui_screen() == "main" ? (
 			ui_screen_set(1, g_arg_index);
 			ui_screen_set(2, g_arg_range);
 			ui_screen_set(3, -1);
+			ui_screen_set(4, g_arg_rangemultiplier);
 		);
 	ui_split_next();
 		gi = 0;
@@ -2277,6 +2462,7 @@ ui_screen() == "main" ? (
 					ui_screen_set(1, g_arg_index);
 					ui_screen_set(2, g_arg_range);
 					ui_screen_set(3, gi);
+					ui_screen_set(4, g_arg_rangemultiplier);
 				);
 			);
 		
@@ -2290,6 +2476,10 @@ ui_screen() == "main" ? (
 	g_arg_index = ui_screen_get(1);
 	g_arg_range = ui_screen_get(2);
 	g_effect_index = ui_screen_get(3);
+	g_arg_rangemultiplier = ui_screen_get(4);
+	!g_arg_rangemultiplier ? (
+		g_arg_rangemultiplier = 0.5;
+	);
 
 	g_effect_index >= 0 ? (
 		g_effect = fx_list_start + fx_list_step*g_effect_index;
@@ -2319,7 +2509,7 @@ ui_screen() == "main" ? (
 			ui_click() ? (
 				g_arg_effect[0] = g_effect_index;
 				g_arg_index[0] = gi;
-				g_arg_range[0] = get_mod_range(g_effect_index, gi)*0.5;
+				g_arg_range[0] = get_mod_range(g_effect_index, gi)*g_arg_rangemultiplier;
 				ui_screen_close("automation-target-index");
 			);
 		
