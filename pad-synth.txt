@@ -1,12 +1,13 @@
 // PadSynth v1.0.0
 // by Geraint Luff
 
-desc:PadSynth
+desc:PadSynth (Geraint Luff)
 in_pin:none;
 out_pin:Left
 out_pin:Right
 options:want_all_kb
 
+// v1.0.0 or above
 import ui-lib.jsfx-inc
 
 @init

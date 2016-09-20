@@ -50,6 +50,8 @@ It's a little slow at the moment - I don't know how much of this is just because
 
 Different filter types, multi-stage filters, make more parameters modulatable.
 
+Generic envelope controller, pan control
+
 Only per-note effects need to be part of this synth - any "global" effect (e.g. reverb) is better implemented as a separate plugin, placed after this one in the chain.
 
 ### Waveform width parameters
