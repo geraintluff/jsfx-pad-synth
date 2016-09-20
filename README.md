@@ -14,18 +14,29 @@ A "model waveform" is generated, and this is used to generate a set of patches u
 
 The samples are designed in the frequency domain (65536 samples long), and then IFFT'd.  By converting each harmonic into a frequency distribution (with random phase) it generates sounds that are both smooth and "thick".
 
+This thickness can be varied using a process vaguely similar to granular synthesis.
+
 ### Intermodulated effects
 
 This synth has its own effects chain applied separately for each note, including modulators that can alter other effects' parameters (or the note pitch/amplitude/spread).
 
-Currently, available effects are:
+Available effects are:
 
 *	Filter - 2nd-order lowpass with basic envelope and note/velocity response.  Various parameters (e.g. frequency and Q) are automatable.
-*	LFO - can modulate other effects.  Frequency and amplitude of LFO are themselves modulatable.
-*	Envelope - modulate other effect parameters using attack/release
-*	Controller/Note/Velocity modulator - modulates other effects using controller values, note number or velocity
 *	Harmonic Modulator (FM) - a frequency modulator for FM synthesis. FM depth and Hz-offset are modulatable.
-*	Distortion - a nonlinear filter (currently tanh() only) with optional asymmetry
+*	Distortion - a nonlinear filter (currently tanh() only) with optional asymmetry.  Wet/dry is modulatable
+
+Available modulators are:
+
+*	Controller/Note/Velocity modulator - uses controller values, note number or velocity
+*	LFO - uses a sinusoid oscillator. Frequency and amplitude of LFO are themselves modulatable.
+*	Envelope - uses attack/release
+
+Modulatable note parameters are:
+
+*	Pitch
+*	Amplitude
+*	Detune/thickness width
 
 Want to make your vibrato dependent on the note velocity?  Want to make your filter frequency dependent on the Expression controller (11)?  Just hook it up.
 
@@ -33,7 +44,7 @@ Want to make your vibrato dependent on the note velocity?  Want to make your fil
 
 Although REAPER's built-in FFT has a maximum size of 32768, we can generate larger samples by implementing an extension to this (using Cooley-Tukey factorisation).
 
-Detuning width is varied by constantly cross-fading between
+Detuning width is varied by constantly cross-fading between two points in the sample one wavelength apart.  How often this crossfade is completed and whether we skip forward or backwards determines whether the overall progression rate through the sample is faster or slower than "natural" playback.  Progressing faster through the sample increases the detuning amount, and progressing slower decreases it.
 
 ## Development
 
