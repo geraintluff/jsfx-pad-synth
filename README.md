@@ -12,21 +12,28 @@ Demos are available in the `demos/` directory, and some presets are in `padsynth
 
 A "model waveform" is generated, and this is used to generate a set of patches used by a sampling engine.
 
-This is based on the "padsynth" algorithm from ZynAddSubFX, where the samples are designed in the frequency domain and then IFFT'd.  Although REAPER's built-in FFT has a maximum size of 32768, we can generate larger samples by implementing an extension to this (using Cooley-Tukey factorisation).
+The samples are designed in the frequency domain (65536 samples long), and then IFFT'd.  By converting each harmonic into a frequency distribution (with random phase) it generates sounds that are both smooth and "thick".
 
 ### Intermodulated effects
 
-This synth has its own effects chain applied separately for each note, including modulators that can alter other effects' parameters (or the note pitch/amplitude).
+This synth has its own effects chain applied separately for each note, including modulators that can alter other effects' parameters (or the note pitch/amplitude/spread).
 
 Currently, available effects are:
 
 *	Filter - 2nd-order lowpass with basic envelope and note/velocity response.  Various parameters (e.g. frequency and Q) are automatable.
 *	LFO - can modulate other effects.  Frequency and amplitude of LFO are themselves modulatable.
+*	Envelope - modulate other effect parameters using attack/release
 *	Controller/Note/Velocity modulator - modulates other effects using controller values, note number or velocity
 *	Harmonic Modulator (FM) - a frequency modulator for FM synthesis. FM depth and Hz-offset are modulatable.
 *	Distortion - a nonlinear filter (currently tanh() only) with optional asymmetry
 
 Want to make your vibrato dependent on the note velocity?  Want to make your filter frequency dependent on the Expression controller (11)?  Just hook it up.
+
+## Implementation details
+
+Although REAPER's built-in FFT has a maximum size of 32768, we can generate larger samples by implementing an extension to this (using Cooley-Tukey factorisation).
+
+Detuning width is varied by constantly cross-fading between
 
 ## Development
 
@@ -50,7 +57,7 @@ It's a little slow at the moment - I don't know how much of this is just because
 
 Different filter types, multi-stage filters, make more parameters modulatable.
 
-Generic envelope controller, pan control
+Pan/width control, global LFO (so that notes can remain in sync even with different starting times).
 
 Only per-note effects need to be part of this synth - any "global" effect (e.g. reverb) is better implemented as a separate plugin, placed after this one in the chain.
 

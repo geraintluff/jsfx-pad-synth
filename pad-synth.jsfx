@@ -241,7 +241,7 @@ uiblock_end = ui_setup(gen_spectrum_end);
 
 // Description of all effects in the system
 fx_spec_start = uiblock_end;
-fx_spec_count = 5/*FX_SPECLIST_INDEX: */;
+fx_spec_count = 6/*FX_SPECLIST_INDEX: */;
 fx_spec_headerlength = 9/*FX_HEADER: NAME, MODCOUNT, FUNC_INIT, CONFIG_UI_FUNCTION, CONFIG_SWAP_FUNCTION, CONFIG_DELETE_FUNCTION, SETUP_NOTE_FUNCTION, PRE_EXEC_NOTE_FUNCTION, EXEC_NOTE_FUNCTION*/;
 fx_spec_modlength = 3/*FX_MOD: RANGE, TYPE, NAME*/;
 fx_spec_var_count = 10; // Maximum number of modulatable parameters
@@ -267,7 +267,7 @@ function get_mod_range(effectIndex, modIndex) local(target_effect, target_spec, 
 		) : modIndex == 1 ? (
 			1;
 		) : (
-			1;
+			3;
 		);
 	) : (
 		target_effect = fx_list_start + fx_list_step*effectIndex;
@@ -284,7 +284,7 @@ function get_mod_type(effectIndex, modIndex) local(target_effect, target_mod) (
 		) : modIndex == 1 ? (
 			0/*FX_MODTYPE:MULT*/;
 		) : (
-			0/*FX_MODTYPE:MULT*/;
+			1/*FX_MODTYPE:ADD*/;
 		);
 	) : (
 		target_effect = fx_list_start + fx_list_step*effectIndex;
@@ -301,7 +301,7 @@ function get_mod_index(effectIndex, modIndex) (
 		) : modIndex == 1 ? (
 			1/*NOTE:AMP*/;
 		) : (
-			2/*NOTE:GRANULAR_RATE*/;
+			2/*NOTE:GRANULAR_RATE_LOG*/;
 		);
 	) : (
 		note_headerlength + note_fx_statelength*effectIndex + modIndex;
@@ -382,7 +382,7 @@ function get_controller_name(index) (
 reset_controllers();
 
 notes_start = controller_values_end;
-note_headerlength = 19/*NOTE: FREQ, AMP, GRANULAR_RATE, ACTIVE, VEL, NOTE, SECONDSFROMSTART, AUDIO_LEFT, AUDIO_RIGHT, SECONDSFROMEND, DECAYRATE, CHANNEL, FREQ_BASE, AMP_BASE, WAVEINDEX_FROM, SAMPLEPOS_FROM, SAMPLEPOS_TO, GRANULAR_POS, ENV*/;
+note_headerlength = 19/*NOTE: FREQ, AMP, GRANULAR_RATE_LOG, ACTIVE, VEL, NOTE, SECONDSFROMSTART, AUDIO_LEFT, AUDIO_RIGHT, SECONDSFROMEND, DECAYRATE, CHANNEL, FREQ_BASE, AMP_BASE, WAVEINDEX_FROM, SAMPLEPOS_FROM, SAMPLEPOS_TO, GRANULAR_POS, ENV*/;
 
 note_fx_statelength = fx_list_statelength;
 notes_step = note_headerlength + note_fx_statelength*fx_list_maxcount;
@@ -592,7 +592,7 @@ function effect_note_exec_lfo(effect, note, notestate) local(angFreq, value, tar
 //////////////// Filter ////////////////
 
 16/*FILTER_NOTE_STATE: LOG_FREQ_BASE, Q_BASE, ATTACK_AMOUNT_BASE, ATTACK_TIME_BASE, X1_L, X2_L, Y1_L, Y2_L, X1_R, X2_R, Y1_R, Y2_R*/ > note_fx_statelength ? ui_error("note state too small for filter");
-7/*FILTER_STATE: ATTACK_AMOUNT_VELOCITY, FREQ_LOG_VELOCITY, FREQ_LOG_NOTE*/ > fx_list_statelength ? ui_error("effect state too small for filter");
+7/*FILTER_STATE: */ > fx_list_statelength ? ui_error("effect state too small for filter");
 effectspec = fx_spec_start + fx_spec_step*1/*FX_SPECLIST_INDEX:FILTER*/;
 effectspec[0/*FX_HEADER:NAME*/] = "Filter";
 effectspec[1/*FX_HEADER:MODCOUNT*/] = 4;
@@ -619,12 +619,11 @@ function effect_init_filter(effect) local(state) (
 	
 	state = effect + fx_list_headerlength;
 	state[0/*FILTER_STATE:FREQ*/] = 1000;
-	state[1/*FILTER_STATE:Q*/] = 2;
+	state[1/*FILTER_STATE:Q*/] = 1.5;
 	state[2/*FILTER_STATE:ATTACK_AMOUNT*/] = 0;
 	state[3/*FILTER_STATE:ATTACK_TIME*/] = 0.1;
 
-	// Private state
-	state[4/*FILTER_STATE:ATTACK_AMOUNT_VELOCITY*/] = log(10);
+	state[4/*FILTER_STATE:ATTACK_AMOUNT_VELOCITY*/] = log(4);
 	state[5/*FILTER_STATE:FREQ_LOG_VELOCITY*/] = log(5);
 	state[6/*FILTER_STATE:FREQ_LOG_NOTE*/] = 0.5;
 );
@@ -1287,6 +1286,197 @@ function effect_note_exec_fm(effect, note, notestate) local(freq, phase, modfreq
 	notestate[4/*FM_NOTE_STATE:PHASE*/] = phase;
 );
 
+//////////////// ENVELOPE ////////////////
+
+7/*ENV_NOTE_STATE: TARGET, MODTYPE, SCALE*/ > note_fx_statelength ? ui_error("note state too small for envelope");
+7/*ENV_STATE: SCALE*/ > fx_list_statelength ? ui_error("effect state too small for envelope");
+effectspec = fx_spec_start + fx_spec_step*5/*FX_SPECLIST_INDEX:ENVELOPE*/;
+effectspec[0/*FX_HEADER:NAME*/] = "Envelope";
+effectspec[1/*FX_HEADER:MODCOUNT*/] = 4;
+modspec = effectspec + fx_spec_headerlength + fx_spec_modlength*0/*ENV_NOTE_STATE:ATTACK_VALUE*/;
+modspec[2/*FX_MOD:NAME*/] = "Attack (value)";
+modspec[1/*FX_MOD:TYPE*/] = 0/*FX_MODTYPE:MULT*/;
+modspec[0/*FX_MOD:RANGE*/] = 1;
+modspec = effectspec + fx_spec_headerlength + fx_spec_modlength*1/*ENV_NOTE_STATE:ATTACK_TIME*/;
+modspec[2/*FX_MOD:NAME*/] = "Attack (time)";
+modspec[1/*FX_MOD:TYPE*/] = 0/*FX_MODTYPE:MULT*/;
+modspec[0/*FX_MOD:RANGE*/] = 1;
+modspec = effectspec + fx_spec_headerlength + fx_spec_modlength*2/*ENV_NOTE_STATE:RELEASE_VALUE*/;
+modspec[2/*FX_MOD:NAME*/] = "Release (value)";
+modspec[1/*FX_MOD:TYPE*/] = 0/*FX_MODTYPE:MULT*/;
+modspec[0/*FX_MOD:RANGE*/] = 1;
+modspec = effectspec + fx_spec_headerlength + fx_spec_modlength*3/*ENV_NOTE_STATE:RELEASE_TIME*/;
+modspec[2/*FX_MOD:NAME*/] = "Release (time)";
+modspec[1/*FX_MOD:TYPE*/] = 0/*FX_MODTYPE:MULT*/;
+modspec[0/*FX_MOD:RANGE*/] = 1;
+
+effectspec[2/*FX_HEADER:FUNC_INIT*/] = 6/*effect_init_env*/;
+function effect_init_env(effect) local(state) (
+	effect[1/*FX:NAME*/] = "Envelope";
+	
+	state = effect + fx_list_headerlength;
+	state[0/*ENV_STATE:MOD_EFFECT*/] = -1; // Initial target: note itself
+	state[1/*ENV_STATE:MOD_INDEX*/] = 2; // Note thickness/detune
+	
+	// Attack and release are expressed in the [-1,1] range
+	state[2/*ENV_STATE:ATTACK_VALUE*/] = 0.5;
+	state[3/*ENV_STATE:ATTACK_TIME*/] = 0.1;
+	state[4/*ENV_STATE:RELEASE_VALUE*/] = -0.5;
+	state[5/*ENV_STATE:RELEASE_TIME*/] = 0.2;
+	// This is used for the actual scale (stored per-parameter), and applied to attack/release
+	state[6/*ENV_STATE:SCALE*/] = get_mod_range(state[0/*ENV_STATE:MOD_EFFECT*/], state[1/*ENV_STATE:MOD_INDEX*/]);
+);
+effectspec[3/*FX_HEADER:CONFIG_UI_FUNCTION*/] = 6/*effect_ui_env*/;
+function effect_ui_env(effect) local(state, effect_index, mod_range) (
+	effect_index = (effect - fx_list_start)/fx_list_step;
+	state = effect + fx_list_headerlength;
+
+	ui_split_topratio(1/5);
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_align(1, -1);
+				ui_padright();
+				ui_text("Attack (value)");
+			ui_pop();
+			ui_split_rightratio(0.2);
+			ui_pop();
+			state[2/*ENV_STATE:ATTACK_VALUE*/] = control_hslider(state[2/*ENV_STATE:ATTACK_VALUE*/], -1, 1, 0);
+		ui_pop();
+	ui_split_next();
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_align(1, -1);
+				ui_padright();
+				ui_text("Attack (time)");
+			ui_pop();
+			ui_split_rightratio(0.2);
+				ui_padleft();
+				ui_align(0, -1);
+				ui_textnumber(state[3/*ENV_STATE:ATTACK_TIME*/]*1000, "%ims");
+			ui_pop();
+			state[3/*ENV_STATE:ATTACK_TIME*/] = control_hslider(state[3/*ENV_STATE:ATTACK_TIME*/], 0.001, 5, 5);
+		ui_pop();
+	ui_split_next();
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_align(1, -1);
+				ui_padright();
+				ui_text("Release (value)");
+			ui_pop();
+			ui_split_rightratio(0.2);
+			ui_pop();
+			state[4/*ENV_STATE:RELEASE_VALUE*/] = control_hslider(state[4/*ENV_STATE:RELEASE_VALUE*/], -1, 1, 0);
+		ui_pop();
+	ui_split_next();
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_align(1, -1);
+				ui_padright();
+				ui_text("Release (time)");
+			ui_pop();
+			ui_split_rightratio(0.2);
+				ui_padleft();
+				ui_align(0, -1);
+				ui_textnumber(state[5/*ENV_STATE:RELEASE_TIME*/]*1000, "%ims");
+			ui_pop();
+			state[5/*ENV_STATE:RELEASE_TIME*/] = control_hslider(state[5/*ENV_STATE:RELEASE_TIME*/], 0.01, 5, 5);
+		ui_pop();
+	ui_split_next();
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_align(1, -1);
+				ui_padright();
+				ui_text("target");
+			ui_pop();
+			ui_split_rightratio(0.2);
+				ui_padleft();
+				ui_padright();
+				control_button("edit") ? (
+					ui_screen_open("automation-target");
+					ui_screen_set(0, state + 0/*ENV_STATE:MOD_EFFECT*/);
+					ui_screen_set(1, state + 1/*ENV_STATE:MOD_INDEX*/);
+					ui_screen_set(2, state + 6/*ENV_STATE:SCALE*/);
+					ui_screen_set(3, effect_index);
+					ui_screen_set(4, 1); // Get full modulation range back
+				);
+			ui_pop();
+			ui_split_leftratio(0.6);
+				ui_padright();
+				control_readout(get_effect_name(state[0/*ENV_STATE:MOD_EFFECT*/]));
+			ui_split_next();
+				control_readout(get_mod_name(state[0/*ENV_STATE:MOD_EFFECT*/], state[1/*ENV_STATE:MOD_INDEX*/]));
+			ui_pop();
+		ui_pop();
+	ui_pop();
+);
+effectspec[4/*FX_HEADER:CONFIG_SWAP_FUNCTION*/] = 3/*effect_swap_env*/;
+function effect_swap_env(effect, fxIndex1, fxIndex2) (
+	state = effect + fx_list_headerlength;
+
+	state[0/*ENV_STATE:MOD_EFFECT*/] == fxIndex1 ? (
+		state[0/*ENV_STATE:MOD_EFFECT*/] = fxIndex2;
+	) : state[0/*ENV_STATE:MOD_EFFECT*/] == fxIndex2 ? (
+		state[0/*ENV_STATE:MOD_EFFECT*/] = fxIndex1;
+	);
+);
+effectspec[5/*FX_HEADER:CONFIG_DELETE_FUNCTION*/] = 3/*effect_delete_env*/;
+function effect_delete_env(effect, fxIndex) (
+	state = effect + fx_list_headerlength;
+
+	state[0/*ENV_STATE:MOD_EFFECT*/] == fxIndex ? (
+		// Our target was just deleted - reset the effect
+		effect_init_env(effect);
+		// Reset to no effect
+		state[2/*ENV_STATE:ATTACK_VALUE*/] = 0;
+		state[4/*ENV_STATE:RELEASE_VALUE*/] = 0;
+	);
+);
+effectspec[6/*FX_HEADER:SETUP_NOTE_FUNCTION*/] = 6/*effect_note_setup_env*/;
+function effect_note_setup_env(effect, note, notestate) (
+	state = effect + fx_list_headerlength;
+	notestate[4/*ENV_NOTE_STATE:TARGET*/] = get_mod_index(state[0/*ENV_STATE:MOD_EFFECT*/], state[1/*ENV_STATE:MOD_INDEX*/]);
+	notestate[5/*ENV_NOTE_STATE:MODTYPE*/] = get_mod_type(state[0/*ENV_STATE:MOD_EFFECT*/], state[1/*ENV_STATE:MOD_INDEX*/]);
+	notestate[6/*ENV_NOTE_STATE:SCALE*/] = state[6/*ENV_STATE:SCALE*/];
+);
+effectspec[7/*FX_HEADER:PRE_EXEC_NOTE_FUNCTION*/] = 5/*effect_note_pre_exec_env*/;
+function effect_note_pre_exec_env(effect, note, notestate) (
+	state = effect + fx_list_headerlength;
+	
+	notestate[0/*ENV_NOTE_STATE:ATTACK_VALUE*/] = state[2/*ENV_STATE:ATTACK_VALUE*/];
+	notestate[1/*ENV_NOTE_STATE:ATTACK_TIME*/] = state[3/*ENV_STATE:ATTACK_TIME*/];
+	notestate[2/*ENV_NOTE_STATE:RELEASE_VALUE*/] = state[4/*ENV_STATE:RELEASE_VALUE*/];
+	notestate[3/*ENV_NOTE_STATE:RELEASE_TIME*/] = state[5/*ENV_STATE:RELEASE_TIME*/];
+);
+effectspec[8/*FX_HEADER:EXEC_NOTE_FUNCTION*/] = 6/*effect_note_exec_env*/;
+function effect_note_exec_env(effect, note, notestate) local(ratio, value) (
+	targetIndex = notestate[4/*ENV_NOTE_STATE:TARGET*/];
+	targetIndex >= 0 ? (
+		value = 0;
+		notestate[1/*ENV_NOTE_STATE:ATTACK_TIME*/] ? (
+			ratio = note[6/*NOTE:SECONDSFROMSTART*/]/notestate[1/*ENV_NOTE_STATE:ATTACK_TIME*/];
+			ratio > 0 && ratio < 1 ? (
+				value += (1 - ratio)*notestate[0/*ENV_NOTE_STATE:ATTACK_VALUE*/];
+			);
+		);
+
+		notestate[3/*ENV_NOTE_STATE:RELEASE_TIME*/] ? (
+			ratio = note[9/*NOTE:SECONDSFROMEND*/]/notestate[3/*ENV_NOTE_STATE:RELEASE_TIME*/];
+			ratio > 0 ? (
+				value += min(1, ratio)*notestate[2/*ENV_NOTE_STATE:RELEASE_VALUE*/];
+			);
+		);
+		value *= notestate[6/*ENV_NOTE_STATE:SCALE*/];
+		debug.scale = notestate[6/*ENV_NOTE_STATE:SCALE*/];
+		debug.value = value;
+		
+		notestate[5/*LFO_NOTE_STATE:MODTYPE*/] == 1/*FX_MODTYPE:ADD*/ ? (
+			note[targetIndex] += value;
+		) : (
+			note[targetIndex] *= max(0, 1 + value);
+		);
+	);
+);
+
 //////////////// Effect Manipulation ////////////////
 
 function effect_init(function_id, effect_slot) (
@@ -1296,6 +1486,7 @@ function effect_init(function_id, effect_slot) (
 		: function_id == 3 ? effect_init_conmod(effect_slot)
 		: function_id == 4 ? effect_init_dist(effect_slot)
 		: function_id == 5 ? effect_init_fm(effect_slot)
+		: function_id == 6 ? effect_init_env(effect_slot)
 	);
 );;
 function config_ui(function_id, effect) (
@@ -1305,18 +1496,21 @@ function config_ui(function_id, effect) (
 		: function_id == 3 ? effect_ui_conmod(effect)
 		: function_id == 4 ? effect_ui_dist(effect)
 		: function_id == 5 ? effect_ui_fm(effect)
+		: function_id == 6 ? effect_ui_env(effect)
 	);
 );;
 function config_swap(function_id, effect, index1, index2) (
 	function_id ? (
 		function_id == 1 ? effect_swap_lfo(effect, index1, index2)
 		: function_id == 2 ? effect_swap_conmod(effect, index1, index2)
+		: function_id == 3 ? effect_swap_env(effect, index1, index2)
 	);
 );;
 function config_delete(function_id, effect, index) (
 	function_id ? (
 		function_id == 1 ? effect_delete_lfo(effect, index)
 		: function_id == 2 ? effect_delete_conmod(effect, index)
+		: function_id == 3 ? effect_delete_env(effect, index)
 	);
 );;
 function note_setup(function_id, effect, note, notestate) (
@@ -1326,6 +1520,7 @@ function note_setup(function_id, effect, note, notestate) (
 		: function_id == 3 ? effect_note_setup_conmod(effect, note, notestate)
 		: function_id == 4 ? effect_note_setup_dist(effect, note, notestate)
 		: function_id == 5 ? effect_note_setup_fm(effect, note, notestate)
+		: function_id == 6 ? effect_note_setup_env(effect, note, notestate)
 	);
 );;
 function note_exec(function_id, effect, note, notestate) (
@@ -1335,6 +1530,7 @@ function note_exec(function_id, effect, note, notestate) (
 		: function_id == 3 ? effect_note_exec_conmod(effect, note, notestate)
 		: function_id == 4 ? effect_note_exec_dist(effect, note, notestate)
 		: function_id == 5 ? effect_note_exec_fm(effect, note, notestate)
+		: function_id == 6 ? effect_note_exec_env(effect, note, notestate)
 	);
 );;
 function note_pre_exec(function_id, effect, note, notestate) (
@@ -1343,6 +1539,7 @@ function note_pre_exec(function_id, effect, note, notestate) (
 		: function_id == 2 ? effect_note_pre_exec_filter(effect, note, notestate)
 		: function_id == 3 ? effect_note_pre_exec_dist(effect, note, notestate)
 		: function_id == 4 ? effect_note_pre_exec_fm(effect, note, notestate)
+		: function_id == 5 ? effect_note_pre_exec_env(effect, note, notestate)
 	);
 );;
 
@@ -1441,12 +1638,6 @@ function reset_to_defaults() (
 	fx_list_count = 0;
 );
 !has_set_parameters ? reset_to_defaults();
-
-srate != prev_srate ? (
-	prev_srate = srate;
-	action_recompute = 1;
-	clear_all_notes();
-);
 
 @block
 
@@ -1680,7 +1871,7 @@ while (
 		secondsFromStart > 0 ? (
 			note[0/*NOTE:FREQ*/] = note[12/*NOTE:FREQ_BASE*/];
 			note[1/*NOTE:AMP*/] = note[13/*NOTE:AMP_BASE*/];
-			note[2/*NOTE:GRANULAR_RATE*/] = 1;
+			note[2/*NOTE:GRANULAR_RATE_LOG*/] = 0;
 
 			// Sample from waveforms
 			wavetable = wavetables_start + note[14/*NOTE:WAVEINDEX_FROM*/]*wavetable_step;
@@ -1701,8 +1892,6 @@ while (
 			
 			granular_ratio = note[17/*NOTE:GRANULAR_POS*/];
 			granular_ratio ? (
-				debug.span = note[16/*NOTE:SAMPLEPOS_TO*/] - note[15/*NOTE:SAMPLEPOS_FROM*/];
-
 				// Second sample value
 				midsample = note[16/*NOTE:SAMPLEPOS_TO*/];
 				lowsample = floor(midsample);
@@ -1775,7 +1964,7 @@ while (
 			// Increment position using frequency
 			freqRatio = note[0/*NOTE:FREQ*/]/wavetable_freq;
 
-			granular_rate = note[2/*NOTE:GRANULAR_RATE*/] - 1;
+			granular_rate = exp(note[2/*NOTE:GRANULAR_RATE_LOG*/]) - 1;
 			granular_ratio += freqRatio*abs(granular_rate)/wavetable[1/*WAVETABLE:WAVELENGTH*/];
 			while (granular_ratio >= 1) (
 				granular_ratio -= 1;
@@ -2276,6 +2465,7 @@ ui_screen() == "main" ? (
 	g_arg_index = ui_screen_get(1);
 	g_arg_range = ui_screen_get(2);
 	g_arg_minIndex = ui_screen_get(3);
+	g_arg_rangemultiplier = ui_screen_get(4);
 
 	g_element_height = min(ui_texth() + ui_vpadding()*2, ui_height()/(fx_list_count + 1));
 	ui_split_top(g_element_height);
@@ -2296,6 +2486,7 @@ ui_screen() == "main" ? (
 			ui_screen_set(1, g_arg_index);
 			ui_screen_set(2, g_arg_range);
 			ui_screen_set(3, -1);
+			ui_screen_set(4, g_arg_rangemultiplier);
 		);
 	ui_split_next();
 		gi = 0;
@@ -2326,6 +2517,7 @@ ui_screen() == "main" ? (
 					ui_screen_set(1, g_arg_index);
 					ui_screen_set(2, g_arg_range);
 					ui_screen_set(3, gi);
+					ui_screen_set(4, g_arg_rangemultiplier);
 				);
 			);
 		
@@ -2339,6 +2531,10 @@ ui_screen() == "main" ? (
 	g_arg_index = ui_screen_get(1);
 	g_arg_range = ui_screen_get(2);
 	g_effect_index = ui_screen_get(3);
+	g_arg_rangemultiplier = ui_screen_get(4);
+	!g_arg_rangemultiplier ? (
+		g_arg_rangemultiplier = 0.5;
+	);
 
 	g_effect_index >= 0 ? (
 		g_effect = fx_list_start + fx_list_step*g_effect_index;
@@ -2368,7 +2564,7 @@ ui_screen() == "main" ? (
 			ui_click() ? (
 				g_arg_effect[0] = g_effect_index;
 				g_arg_index[0] = gi;
-				g_arg_range[0] = get_mod_range(g_effect_index, gi)*0.5;
+				g_arg_range[0] = get_mod_range(g_effect_index, gi)*g_arg_rangemultiplier;
 				ui_screen_close("automation-target-index");
 			);
 		

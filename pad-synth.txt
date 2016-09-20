@@ -267,7 +267,7 @@ function get_mod_range(effectIndex, modIndex) local(target_effect, target_spec, 
 		) : modIndex == 1 ? (
 			1;
 		) : (
-			1;
+			3;
 		);
 	) : (
 		target_effect = fx_list_start + fx_list_step*effectIndex;
@@ -284,7 +284,7 @@ function get_mod_type(effectIndex, modIndex) local(target_effect, target_mod) (
 		) : modIndex == 1 ? (
 			FX_MODTYPE#MULT;
 		) : (
-			FX_MODTYPE#MULT;
+			FX_MODTYPE#ADD;
 		);
 	) : (
 		target_effect = fx_list_start + fx_list_step*effectIndex;
@@ -301,7 +301,7 @@ function get_mod_index(effectIndex, modIndex) (
 		) : modIndex == 1 ? (
 			NOTE#AMP;
 		) : (
-			NOTE#GRANULAR_RATE;
+			NOTE#GRANULAR_RATE_LOG;
 		);
 	) : (
 		note_headerlength + note_fx_statelength*effectIndex + modIndex;
@@ -619,11 +619,11 @@ function effect_init_filter(effect) local(state) (
 	
 	state = effect + fx_list_headerlength;
 	state[FILTER_STATE#FREQ(0)] = 1000;
-	state[FILTER_STATE#Q(1)] = 2;
+	state[FILTER_STATE#Q(1)] = 1.5;
 	state[FILTER_STATE#ATTACK_AMOUNT(2)] = 0;
 	state[FILTER_STATE#ATTACK_TIME(3)] = 0.1;
 
-	state[FILTER_STATE#ATTACK_AMOUNT_VELOCITY(4)] = log(10);
+	state[FILTER_STATE#ATTACK_AMOUNT_VELOCITY(4)] = log(4);
 	state[FILTER_STATE#FREQ_LOG_VELOCITY(5)] = log(5);
 	state[FILTER_STATE#FREQ_LOG_NOTE(6)] = 0.5;
 );
@@ -1316,15 +1316,15 @@ function effect_init_env(effect) local(state) (
 	
 	state = effect + fx_list_headerlength;
 	state[ENV_STATE#MOD_EFFECT(0)] = -1; // Initial target: note itself
-	state[ENV_STATE#MOD_INDEX(1)] = 1; // Note amplitude
+	state[ENV_STATE#MOD_INDEX(1)] = 2; // Note thickness/detune
 	
 	// Attack and release are expressed in the [-1,1] range
-	state[ENV_STATE#ATTACK_VALUE(2)] = -1;
-	state[ENV_STATE#ATTACK_TIME(3)] = 0.5;
-	state[ENV_STATE#RELEASE_VALUE(4)] = -1;
-	state[ENV_STATE#RELEASE_TIME(5)] = 1;
+	state[ENV_STATE#ATTACK_VALUE(2)] = 0.5;
+	state[ENV_STATE#ATTACK_TIME(3)] = 0.1;
+	state[ENV_STATE#RELEASE_VALUE(4)] = -0.5;
+	state[ENV_STATE#RELEASE_TIME(5)] = 0.2;
 	// This is used for the actual scale (stored per-parameter), and applied to attack/release
-	state[ENV_STATE#SCALE] = 1;
+	state[ENV_STATE#SCALE] = get_mod_range(state[ENV_STATE#MOD_EFFECT], state[ENV_STATE#MOD_INDEX]);
 );
 effectspec[FX_HEADER#CONFIG_UI_FUNCTION] = {config_ui}effect_ui_env;
 function effect_ui_env(effect) local(state, effect_index, mod_range) (
@@ -1339,7 +1339,6 @@ function effect_ui_env(effect) local(state, effect_index, mod_range) (
 				ui_text("Attack (value)");
 			ui_pop();
 			ui_split_rightratio(0.2);
-				ui_textnumber(state[ENV_STATE#ATTACK_VALUE], "%f");
 			ui_pop();
 			state[ENV_STATE#ATTACK_VALUE] = control_hslider(state[ENV_STATE#ATTACK_VALUE], -1, 1, 0);
 		ui_pop();
@@ -1355,7 +1354,7 @@ function effect_ui_env(effect) local(state, effect_index, mod_range) (
 				ui_align(0, -1);
 				ui_textnumber(state[ENV_STATE#ATTACK_TIME]*1000, "%ims");
 			ui_pop();
-			state[ENV_STATE#ATTACK_TIME] = control_hslider(state[ENV_STATE#ATTACK_TIME], 0.001, 1.5, 3);
+			state[ENV_STATE#ATTACK_TIME] = control_hslider(state[ENV_STATE#ATTACK_TIME], 0.001, 5, 5);
 		ui_pop();
 	ui_split_next();
 		ui_push_heighttext(-1);
@@ -1380,7 +1379,7 @@ function effect_ui_env(effect) local(state, effect_index, mod_range) (
 				ui_align(0, -1);
 				ui_textnumber(state[ENV_STATE#RELEASE_TIME]*1000, "%ims");
 			ui_pop();
-			state[ENV_STATE#RELEASE_TIME] = control_hslider(state[ENV_STATE#RELEASE_TIME], 0.01, 1.5, 3);
+			state[ENV_STATE#RELEASE_TIME] = control_hslider(state[ENV_STATE#RELEASE_TIME], 0.01, 5, 5);
 		ui_pop();
 	ui_split_next();
 		ui_push_heighttext(-1);
@@ -1816,7 +1815,7 @@ while (
 		secondsFromStart > 0 ? (
 			note[NOTE#FREQ] = note[NOTE#FREQ_BASE];
 			note[NOTE#AMP] = note[NOTE#AMP_BASE];
-			note[NOTE#GRANULAR_RATE] = 1;
+			note[NOTE#GRANULAR_RATE_LOG] = 0;
 
 			// Sample from waveforms
 			wavetable = wavetables_start + note[NOTE#WAVEINDEX_FROM]*wavetable_step;
@@ -1909,7 +1908,7 @@ while (
 			// Increment position using frequency
 			freqRatio = note[NOTE#FREQ]/wavetable_freq;
 
-			granular_rate = note[NOTE#GRANULAR_RATE] - 1;
+			granular_rate = exp(note[NOTE#GRANULAR_RATE_LOG]) - 1;
 			granular_ratio += freqRatio*abs(granular_rate)/wavetable[WAVETABLE#WAVELENGTH];
 			while (granular_ratio >= 1) (
 				granular_ratio -= 1;
