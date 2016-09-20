@@ -264,6 +264,8 @@ function get_mod_range(effectIndex, modIndex) local(target_effect, target_spec, 
 	effectIndex < 0 ? (
 		modIndex == 0 ? (
 			0.03;
+		) : modIndex == 1 ? (
+			1;
 		) : (
 			1;
 		);
@@ -278,6 +280,8 @@ function get_mod_range(effectIndex, modIndex) local(target_effect, target_spec, 
 function get_mod_type(effectIndex, modIndex) local(target_effect, target_mod) (
 	effectIndex < 0 ? (
 		modIndex == 0 ? (
+			FX_MODTYPE#MULT;
+		) : modIndex == 1 ? (
 			FX_MODTYPE#MULT;
 		) : (
 			FX_MODTYPE#MULT;
@@ -294,8 +298,10 @@ function get_mod_index(effectIndex, modIndex) (
 	effectIndex < 0 ? (
 		modIndex == 0 ? (
 			NOTE#FREQ;
-		) : (
+		) : modIndex == 1 ? (
 			NOTE#AMP;
+		) : (
+			NOTE#GRANULAR_RATE;
 		);
 	) : (
 		note_headerlength + note_fx_statelength*effectIndex + modIndex;
@@ -305,8 +311,10 @@ function get_mod_name(effectIndex, modIndex) local(target_effect, target_mod) (
 	effectIndex < 0 ? (
 		modIndex == 0 ? (
 			"Frequency";
-		) : (
+		) : modIndex == 1 ? (
 			"Amplitude";
+		) : (
+			"Thickness/Width";
 		);
 	) : (
 		target_effect = fx_list_start + fx_list_step*effectIndex;
@@ -1385,6 +1393,12 @@ function reset_to_defaults() (
 );
 !has_set_parameters ? reset_to_defaults();
 
+srate != prev_srate ? (
+	prev_srate = srate;
+	action_recompute = 1;
+	clear_all_notes();
+);
+
 @block
 
 //////////////// Compute Samples ////////////////
@@ -1480,6 +1494,7 @@ recompute_index < wavetables_count ? (
 		// Place in wavetable
 		wavetable = wavetables_start + wavetable_step*wavetable_index;
 		wavetable[WAVETABLE#FREQ] = base_freq*srate/wavetable_refsrate;
+		wavetable[WAVETABLE#WAVELENGTH] = wavetable_refsrate/base_freq;
 		wavetable_samples = wavetable + wavetable_headerlength;
 		assignedwavetable = wavetable;
 		i = 0;
@@ -1544,9 +1559,10 @@ while (midirecv(midi_offset, midi_msg1, midi_msg23)) (
 			// Wavetable params
 			wavetable_index = log(note[NOTE#FREQ_BASE]/wavetable_low)/log(wavetable_high/wavetable_low)*wavetables_count;
 			wavetable_index = min(wavetables_count - 1, max(0, floor(wavetable_index)));
-			note[NOTE#WAVEINDEX] = wavetable_index; // Wavetable #0
-			note[NOTE#SAMPLEPOS] = rand(wavetable_sampleslength);
-			display_wavetable_index = wavetable_index;
+			note[NOTE#WAVEINDEX_FROM] = wavetable_index; // Wavetable #0
+			note[NOTE#SAMPLEPOS_FROM] = rand(wavetable_sampleslength);
+			note[NOTE#SAMPLEPOS_TO] = note[NOTE#SAMPLEPOS_FROM];
+			note[NOTE#GRANULAR_POS] = 1;
 			
 			// FX note setup
 			i = 0;
@@ -1615,11 +1631,13 @@ while (
 		secondsFromStart > 0 ? (
 			note[NOTE#FREQ] = note[NOTE#FREQ_BASE];
 			note[NOTE#AMP] = note[NOTE#AMP_BASE];
+			note[NOTE#GRANULAR_RATE] = 1;
 
 			// Sample from waveforms
-			wavetable = wavetables_start + note[NOTE#WAVEINDEX]*wavetable_step;
+			wavetable = wavetables_start + note[NOTE#WAVEINDEX_FROM]*wavetable_step;
+			wavetable_freq = wavetable[WAVETABLE#FREQ];
 			wavetable_samples = wavetable + wavetable_headerlength;
-			midsample = note[NOTE#SAMPLEPOS];
+			midsample = note[NOTE#SAMPLEPOS_FROM];
 			lowsample = floor(midsample);
 			highsample = ceil(midsample)%wavetable_sampleslength;
 			ratio = (midsample - lowsample);
@@ -1631,6 +1649,25 @@ while (
 			lowvalue = wavetable_samples[2*lowsample + 1];
 			highvalue = wavetable_samples[2*highsample + 1];
 			note[NOTE#AUDIO_RIGHT] = lowvalue + (highvalue - lowvalue)*ratio;
+			
+			granular_ratio = note[NOTE#GRANULAR_POS];
+			granular_ratio ? (
+				debug.span = note[NOTE#SAMPLEPOS_TO] - note[NOTE#SAMPLEPOS_FROM];
+
+				// Second sample value
+				midsample = note[NOTE#SAMPLEPOS_TO];
+				lowsample = floor(midsample);
+				highsample = ceil(midsample)%wavetable_sampleslength;
+				ratio = (midsample - lowsample);
+				
+				lowvalue = wavetable_samples[2*lowsample];
+				highvalue = wavetable_samples[2*highsample];
+				note[NOTE#AUDIO_LEFT] = (lowvalue + (highvalue - lowvalue)*ratio)*granular_ratio + note[NOTE#AUDIO_LEFT]*(1 - granular_ratio);
+
+				lowvalue = wavetable_samples[2*lowsample + 1];
+				highvalue = wavetable_samples[2*highsample + 1];
+				note[NOTE#AUDIO_RIGHT] = (lowvalue + (highvalue - lowvalue)*ratio)*granular_ratio + note[NOTE#AUDIO_RIGHT]*(1 - granular_ratio);
+			);
 
 			env = 1;
 			stretch = param_env_linear ? 1 : 1;
@@ -1687,17 +1724,38 @@ while (
 			);
 
 			// Increment position using frequency
-			wavetable_freq = wavetable[WAVETABLE#FREQ];
 			freqRatio = note[NOTE#FREQ]/wavetable_freq;
 
-			midsample += freqRatio;
+			granular_rate = note[NOTE#GRANULAR_RATE] - 1;
+			granular_ratio += freqRatio*abs(granular_rate)/wavetable[WAVETABLE#WAVELENGTH];
+			while (granular_ratio >= 1) (
+				granular_ratio -= 1;
+				note[NOTE#SAMPLEPOS_FROM] = note[NOTE#SAMPLEPOS_TO];
+				granular_rate > 0 ? (
+					note[NOTE#SAMPLEPOS_TO] += wavetable[WAVETABLE#WAVELENGTH];
+				) : (
+					note[NOTE#SAMPLEPOS_TO] -= wavetable[WAVETABLE#WAVELENGTH];
+				);
+			);
+			note[NOTE#GRANULAR_POS] = granular_ratio;
+
+			midsample = note[NOTE#SAMPLEPOS_FROM] + freqRatio;
 			while (midsample < 0) (
 				midsample += wavetable_sampleslength;
 			);
 			while (midsample > wavetable_sampleslength) (
 				midsample -= wavetable_sampleslength;
 			);
-			note[NOTE#SAMPLEPOS] = midsample;
+			note[NOTE#SAMPLEPOS_FROM] = midsample;
+
+			midsample = note[NOTE#SAMPLEPOS_TO] + freqRatio;
+			while (midsample < 0) (
+				midsample += wavetable_sampleslength;
+			);
+			while (midsample > wavetable_sampleslength) (
+				midsample -= wavetable_sampleslength;
+			);
+			note[NOTE#SAMPLEPOS_TO] = midsample;
 			
 			spl0 += note[NOTE#AUDIO_LEFT]*note[NOTE#AMP]*env;
 			spl1 += note[NOTE#AUDIO_RIGHT]*note[NOTE#AMP]*env;
@@ -2238,19 +2296,14 @@ ui_screen() == "main" ? (
 		g_effect_spec = fx_spec_start + fx_spec_step*g_effect[FX#SPEC_INDEX];
 		g_effect_modcount = g_effect_spec[FX_HEADER#MODCOUNT];
 	) : (
-		g_effect_modcount = 2;
+		g_effect_modcount = 3;
 	);
 	
 	g_element_height = min(ui_texth() + ui_vpadding()*2, ui_height()/max(1, g_effect_modcount));
 	ui_split_top(g_element_height);
 		gi = 0;
 		while (gi < g_effect_modcount) (
-			g_effect_index >= 0 ? (
-				g_mod_spec = g_effect_spec + fx_spec_headerlength + fx_spec_modlength*gi;
-				g_mod_name = g_mod_spec[FX_MOD#NAME]; 
-			) : (
-				g_mod_name = (gi == 0) ? "Frequency" : "Amplitude";
-			);
+			g_mod_name = get_mod_name(g_effect_index, gi);
 			
 			ui_hover() ? (
 				control_button(g_mod_name);
