@@ -1,8 +1,8 @@
 # PadSynth
 
-This is a synth written in REAPER's JSFX language.
+This is a synth written in REAPER's JSFX language.  It is included in my [JSFX collection](https://geraintluff.github.io/jsfx/), which supports ReaPack.
 
-To use, copy `pad-synth.jsfx` to REAPER's JSFX directory.  This synth uses a [JSFX UI library](https://github.com/geraintluff/jsfx-ui-lib) for its interface - you'll need to have `ui-lib.jsfx-inc` in the same directory as this synth for it to work.
+To install by hand, copy `pad-synth.jsfx` to REAPER's `Effects/` directory.  This synth uses a [JSFX UI library](https://github.com/geraintluff/jsfx-ui-lib) for its interface - you'll need to have `ui-lib.jsfx-inc` in the same directory as this synth for it to work.
 
 Demos are available in the `demos/` directory, and some presets are in `padsynth-presets.rpl`.
 
@@ -48,21 +48,31 @@ Detuning width is varied by constantly cross-fading between two points in the sa
 
 ## Development
 
-The code is in `pad-synth.txt`.  This project makes use of a [JSFX preprocessor](https://www.npmjs.com/package/jsfx-preprocessor) that I wrote, and this is what generates `pad-synth.jsfx`.
+The code is in `pad-synth.txt`.  This project makes use of a [JSFX preprocessor](https://www.npmjs.com/package/jsfx-preprocessor) to generate `pad-synth.jsfx`.
 
 This means that to assemble the final code, you'll need Node.js installed.
 
 ```
-node build.js /path/to/pad-synth.jsfx
+node build.js
 ```
 
-If you omit the argument, it builds `pad-synth.jsfx` in the current directory.
+To monitor with `nodemon`, use `npm run nodemon` - you can also specify any additional locations to write the result to (e.g. the [JSFX collection](https://github.com/geraintluff/jsfx)):
+
+```
+npm run nodemon -- ../jsfx-collection/pad-synth.jsfx
+```
 
 ## Goals
+
+Here are some things I'd like to work on in future:
 
 ### Speed
 
 It's a little slow at the moment - I don't know how much of this is just because it's written in JSFX, but maybe there are some things that could speed it up.
+
+### Custom waveforms
+
+We could have custom waveforms by specifying harmonics, or even drawing them (which is then analysed and turned into harmonics).
 
 ### More effects
 

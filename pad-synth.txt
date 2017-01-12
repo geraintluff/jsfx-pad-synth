@@ -1,7 +1,4 @@
-// PadSynth v1.0.0
-// by Geraint Luff
-
-desc:PadSynth (Geraint Luff)
+desc:PadSynth (by Geraint Luff)
 in_pin:none;
 out_pin:Left
 out_pin:Right
@@ -2757,3 +2754,8 @@ file_avail(0) >= 0 ? (
 	write_plain_var(VAR_ID#param_env_linear(99), param_env_linear);
 	write_effects();
 );
+
+// Stop the pre-processor complaining - these variables are never counted, but that's OK
+// VAR_ID##
+// DIST_CURVE##
+// FX_MODTYPE##
