@@ -5,6 +5,15 @@ out_pin:Left
 out_pin:Right
 options:want_all_kb
 
+slider1:0<-1,1,0.01>-Slider 1
+slider2:0<-1,1,0.01>-Slider 2
+slider3:0<-1,1,0.01>-Slider 3
+slider4:0<-1,1,0.01>-Slider 4
+slider5:0<-1,1,0.01>-Slider 5
+slider6:0<-1,1,0.01>-Slider 6
+slider7:0<-1,1,0.01>-Slider 7
+slider8:0<-1,1,0.01>-Slider 8
+
 // v1.0.0 or above
 import ui-lib.jsfx-inc
 
@@ -239,7 +248,7 @@ uiblock_end = ui_setup(gen_spectrum_end);
 
 // Description of all effects in the system
 fx_spec_start = uiblock_end;
-fx_spec_count = 6/*FX_SPECLIST_INDEX: */;
+fx_spec_count = 7/*FX_SPECLIST_INDEX: */;
 fx_spec_headerlength = 9/*FX_HEADER: NAME, MODCOUNT, FUNC_INIT, CONFIG_UI_FUNCTION, CONFIG_SWAP_FUNCTION, CONFIG_DELETE_FUNCTION, SETUP_NOTE_FUNCTION, PRE_EXEC_NOTE_FUNCTION, EXEC_NOTE_FUNCTION*/;
 fx_spec_modlength = 3/*FX_MOD: RANGE, TYPE, NAME*/;
 fx_spec_var_count = 10; // Maximum number of modulatable parameters
@@ -529,7 +538,7 @@ function effect_ui_lfo(effect) local(state, effect_index, mod_range) (
 	ui_pop();
 );
 effectspec[4/*FX_HEADER:CONFIG_SWAP_FUNCTION*/] = 1/*effect_swap_lfo*/;
-function effect_swap_lfo(effect, fxIndex1, fxIndex2) (
+function effect_swap_lfo(effect, fxIndex1, fxIndex2) local(state) (
 	state = effect + fx_list_headerlength;
 
 	state[0/*LFO_STATE:MOD_EFFECT*/] == fxIndex1 ? (
@@ -539,7 +548,7 @@ function effect_swap_lfo(effect, fxIndex1, fxIndex2) (
 	);
 );
 effectspec[5/*FX_HEADER:CONFIG_DELETE_FUNCTION*/] = 1/*effect_delete_lfo*/;
-function effect_delete_lfo(effect, fxIndex) (
+function effect_delete_lfo(effect, fxIndex) local(state) (
 	state = effect + fx_list_headerlength;
 
 	state[0/*LFO_STATE:MOD_EFFECT*/] == fxIndex ? (
@@ -959,7 +968,7 @@ function effect_ui_conmod(effect) local(state, effect_index, mod_range, source, 
 	control_finish_enabled(1);
 );
 effectspec[4/*FX_HEADER:CONFIG_SWAP_FUNCTION*/] = 2/*effect_swap_conmod*/;
-function effect_swap_conmod(effect, fxIndex1, fxIndex2) (
+function effect_swap_conmod(effect, fxIndex1, fxIndex2) local(state) (
 	state = effect + fx_list_headerlength;
 
 	state[0/*CONMOD_STATE:MOD_EFFECT*/] == fxIndex1 ? (
@@ -969,7 +978,7 @@ function effect_swap_conmod(effect, fxIndex1, fxIndex2) (
 	);
 );
 effectspec[5/*FX_HEADER:CONFIG_DELETE_FUNCTION*/] = 2/*effect_delete_conmod*/;
-function effect_delete_conmod(effect, fxIndex) (
+function effect_delete_conmod(effect, fxIndex) local(state) (
 	state = effect + fx_list_headerlength;
 
 	state[0/*CONMOD_STATE:MOD_EFFECT*/] == fxIndex ? (
@@ -1137,12 +1146,12 @@ function effect_note_setup_dist(effect, note, notestate) local(state) (
 	state = effect + fx_list_headerlength;
 );
 effectspec[7/*FX_HEADER:PRE_EXEC_NOTE_FUNCTION*/] = 3/*effect_note_pre_exec_dist*/;
-function effect_note_pre_exec_dist(effect, note, notestate) (
+function effect_note_pre_exec_dist(effect, note, notestate) local(state) (
 	state = effect + fx_list_headerlength;
 	notestate[0/*DIST_NOTE_STATE:WET*/] = state[4/*DIST_STATE:WET*/];
 );
 effectspec[8/*FX_HEADER:EXEC_NOTE_FUNCTION*/] = 4/*effect_note_exec_dist*/;
-function effect_note_exec_dist(effect, note, notestate) local(asymmetry, tanh_asymmetry, wet, preGain, postGain) (
+function effect_note_exec_dist(effect, note, notestate) local(state, asymmetry, tanh_asymmetry, wet, preGain, postGain) (
 	state = effect + fx_list_headerlength;
 
 	preGain = exp(-state[0/*DIST_STATE:LIMIT_LOG*/]);
@@ -1270,7 +1279,7 @@ function effect_note_pre_exec_fm(effect, note, notestate) (
 	notestate[1/*FM_NOTE_STATE:OFFSET_HZ*/] = notestate[3/*FM_NOTE_STATE:OFFSET_HZ_BASE*/];
 );
 effectspec[8/*FX_HEADER:EXEC_NOTE_FUNCTION*/] = 5/*effect_note_exec_fm*/;
-function effect_note_exec_fm(effect, note, notestate) local(freq, phase, modfreq, amp) (
+function effect_note_exec_fm(effect, note, notestate) local(state, freq, phase, modfreq, amp) (
 	state = effect + fx_list_headerlength;
 
 	amp = notestate[0/*FM_NOTE_STATE:AMP*/];
@@ -1408,7 +1417,7 @@ function effect_ui_env(effect) local(state, effect_index, mod_range) (
 	ui_pop();
 );
 effectspec[4/*FX_HEADER:CONFIG_SWAP_FUNCTION*/] = 3/*effect_swap_env*/;
-function effect_swap_env(effect, fxIndex1, fxIndex2) (
+function effect_swap_env(effect, fxIndex1, fxIndex2) local(state) (
 	state = effect + fx_list_headerlength;
 
 	state[0/*ENV_STATE:MOD_EFFECT*/] == fxIndex1 ? (
@@ -1418,7 +1427,7 @@ function effect_swap_env(effect, fxIndex1, fxIndex2) (
 	);
 );
 effectspec[5/*FX_HEADER:CONFIG_DELETE_FUNCTION*/] = 3/*effect_delete_env*/;
-function effect_delete_env(effect, fxIndex) (
+function effect_delete_env(effect, fxIndex) local(state) (
 	state = effect + fx_list_headerlength;
 
 	state[0/*ENV_STATE:MOD_EFFECT*/] == fxIndex ? (
@@ -1430,14 +1439,14 @@ function effect_delete_env(effect, fxIndex) (
 	);
 );
 effectspec[6/*FX_HEADER:SETUP_NOTE_FUNCTION*/] = 6/*effect_note_setup_env*/;
-function effect_note_setup_env(effect, note, notestate) (
+function effect_note_setup_env(effect, note, notestate) local(state) (
 	state = effect + fx_list_headerlength;
 	notestate[4/*ENV_NOTE_STATE:TARGET*/] = get_mod_index(state[0/*ENV_STATE:MOD_EFFECT*/], state[1/*ENV_STATE:MOD_INDEX*/]);
 	notestate[5/*ENV_NOTE_STATE:MODTYPE*/] = get_mod_type(state[0/*ENV_STATE:MOD_EFFECT*/], state[1/*ENV_STATE:MOD_INDEX*/]);
 	notestate[6/*ENV_NOTE_STATE:SCALE*/] = state[6/*ENV_STATE:SCALE*/];
 );
 effectspec[7/*FX_HEADER:PRE_EXEC_NOTE_FUNCTION*/] = 5/*effect_note_pre_exec_env*/;
-function effect_note_pre_exec_env(effect, note, notestate) (
+function effect_note_pre_exec_env(effect, note, notestate) local(state) (
 	state = effect + fx_list_headerlength;
 	
 	notestate[0/*ENV_NOTE_STATE:ATTACK_VALUE*/] = state[2/*ENV_STATE:ATTACK_VALUE*/];
@@ -1464,10 +1473,182 @@ function effect_note_exec_env(effect, note, notestate) local(ratio, value) (
 			);
 		);
 		value *= notestate[6/*ENV_NOTE_STATE:SCALE*/];
-		debug.scale = notestate[6/*ENV_NOTE_STATE:SCALE*/];
-		debug.value = value;
 		
-		notestate[5/*LFO_NOTE_STATE:MODTYPE*/] == 1/*FX_MODTYPE:ADD*/ ? (
+		notestate[5/*ENV_NOTE_STATE:MODTYPE*/] == 1/*FX_MODTYPE:ADD*/ ? (
+			note[targetIndex] += value;
+		) : (
+			note[targetIndex] *= max(0, 1 + value);
+		);
+	);
+);
+
+//////////////// SLIDER ////////////////
+
+6/*SLIDER_NOTE_STATE: STRENGTH_BASE, VALUE, TARGET, MODTYPE, SMOOTHING_FACTOR*/ > note_fx_statelength ? ui_error("note state too small for slider");
+5/*SLIDER_STATE: SMOOTHING, SLIDER_INDEX*/ > fx_list_statelength ? ui_error("effect state too small for slider");
+effectspec = fx_spec_start + fx_spec_step*6/*FX_SPECLIST_INDEX:SLIDER*/;
+effectspec[0/*FX_HEADER:NAME*/] = "Slider (1-8)";
+effectspec[1/*FX_HEADER:MODCOUNT*/] = 1;
+modspec = effectspec + fx_spec_headerlength + fx_spec_modlength*0/*SLIDER_NOTE_STATE:STRENGTH*/;
+modspec[2/*FX_MOD:NAME*/] = "Strength";
+modspec[1/*FX_MOD:TYPE*/] = 0/*FX_MODTYPE:MULT*/;
+modspec[0/*FX_MOD:RANGE*/] = 1;
+
+effectspec[2/*FX_HEADER:FUNC_INIT*/] = 7/*effect_init_slider*/;
+function effect_init_slider(effect) local(state) (
+	effect[1/*FX:NAME*/] = "Slider";
+	
+	state = effect + fx_list_headerlength;
+	state[0/*SLIDER_STATE:MOD_EFFECT*/] = -1; // Initial target: note itself
+	state[1/*SLIDER_STATE:MOD_INDEX*/] = 2; // Note thickness/detune
+	
+	// Attack and release are expressed in the [-1,1] range
+	state[2/*SLIDER_STATE:STRENGTH*/] = 1;
+	state[3/*SLIDER_STATE:SMOOTHING*/] = 0.005;
+	state[4/*SLIDER_STATE:SLIDER_INDEX*/] = 1;
+);
+effectspec[3/*FX_HEADER:CONFIG_UI_FUNCTION*/] = 7/*effect_ui_slider*/;
+function effect_ui_slider(effect) local(state, effect_index, mod_range, sliderIndex, sliderName) (
+	effect_index = (effect - fx_list_start)/fx_list_step;
+	state = effect + fx_list_headerlength;
+
+	mod_range = get_mod_range(state[0/*SLIDER_STATE:MOD_EFFECT*/], state[1/*SLIDER_STATE:MOD_INDEX*/]);
+	ui_split_topratio(1/4);
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_align(1, -1);
+				ui_padright();
+				ui_text("Slider");
+			ui_pop();
+			ui_split_rightratio(0.2);
+			ui_pop();
+			sliderIndex = state[4/*SLIDER_STATE:SLIDER_INDEX*/];
+			sprintf(#slider_name, "Slider %i", sliderIndex);
+			state[4/*SLIDER_STATE:SLIDER_INDEX*/] = control_selector(sliderIndex, #slider_name, sliderIndex%8 + 1, (sliderIndex + 6)%8 + 1);
+		ui_pop();
+	ui_split_next();
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_align(1, -1);
+				ui_padright();
+				ui_text("Strength");
+			ui_pop();
+			ui_split_rightratio(0.2);
+			ui_pop();
+			state[2/*SLIDER_STATE:STRENGTH*/] = control_hslider(state[2/*SLIDER_STATE:STRENGTH*/], 0, mod_range, 0);
+		ui_pop();
+	ui_split_next();
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_align(1, -1);
+				ui_padright();
+				ui_text("Smoothing");
+			ui_pop();
+			ui_split_rightratio(0.2);
+				ui_padleft();
+				ui_align(0, -1);
+				ui_textnumber(state[3/*SLIDER_STATE:SMOOTHING*/]*1000, "%ims");
+			ui_pop();
+			state[3/*SLIDER_STATE:SMOOTHING*/] = control_hslider(state[3/*SLIDER_STATE:SMOOTHING*/], 0, 0.02, 3);
+		ui_pop();
+	ui_split_next();
+		ui_push_heighttext(-1);
+			ui_split_leftratio(0.2);
+				ui_align(1, -1);
+				ui_padright();
+				ui_text("target");
+			ui_pop();
+			ui_split_rightratio(0.2);
+				ui_padleft();
+				ui_padright();
+				control_button("edit") ? (
+					ui_screen_open("automation-target");
+					ui_screen_set(0, state + 0/*SLIDER_STATE:MOD_EFFECT*/);
+					ui_screen_set(1, state + 1/*SLIDER_STATE:MOD_INDEX*/);
+					ui_screen_set(2, state + 2/*SLIDER_STATE:STRENGTH*/);
+					ui_screen_set(3, effect_index);
+					ui_screen_set(4, 1); // Get full modulation range back
+				);
+			ui_pop();
+			ui_split_leftratio(0.6);
+				ui_padright();
+				control_readout(get_effect_name(state[0/*SLIDER_STATE:MOD_EFFECT*/]));
+			ui_split_next();
+				control_readout(get_mod_name(state[0/*SLIDER_STATE:MOD_EFFECT*/], state[1/*SLIDER_STATE:MOD_INDEX*/]));
+			ui_pop();
+		ui_pop();
+	ui_pop();
+);
+effectspec[4/*FX_HEADER:CONFIG_SWAP_FUNCTION*/] = 4/*effect_swap_slider*/;
+function effect_swap_slider(effect, fxIndex1, fxIndex2) local(state) (
+	state = effect + fx_list_headerlength;
+
+	state[0/*SLIDER_STATE:MOD_EFFECT*/] == fxIndex1 ? (
+		state[0/*SLIDER_STATE:MOD_EFFECT*/] = fxIndex2;
+	) : state[0/*SLIDER_STATE:MOD_EFFECT*/] == fxIndex2 ? (
+		state[0/*SLIDER_STATE:MOD_EFFECT*/] = fxIndex1;
+	);
+);
+effectspec[5/*FX_HEADER:CONFIG_DELETE_FUNCTION*/] = 4/*effect_delete_slider*/;
+function effect_delete_slider(effect, fxIndex) local(state) (
+	state = effect + fx_list_headerlength;
+
+	state[0/*SLIDER_STATE:MOD_EFFECT*/] == fxIndex ? (
+		// Our target was just deleted - reset the effect
+		effect_init_slider(effect);
+		// Reset to no effect
+		state[2/*SLIDER_STATE:STRENGTH*/] = 0;
+	);
+);
+effectspec[6/*FX_HEADER:SETUP_NOTE_FUNCTION*/] = 7/*effect_note_setup_slider*/;
+function effect_note_setup_slider(effect, note, notestate) local(state) (
+	state = effect + fx_list_headerlength;
+	notestate[1/*SLIDER_NOTE_STATE:STRENGTH_BASE*/] = state[2/*SLIDER_STATE:STRENGTH*/];
+	notestate[2/*SLIDER_NOTE_STATE:VALUE*/] = 0;
+	notestate[3/*SLIDER_NOTE_STATE:TARGET*/] = get_mod_index(state[0/*SLIDER_STATE:MOD_EFFECT*/], state[1/*SLIDER_STATE:MOD_INDEX*/]);
+	notestate[4/*SLIDER_NOTE_STATE:MODTYPE*/] = get_mod_type(state[0/*SLIDER_STATE:MOD_EFFECT*/], state[1/*SLIDER_STATE:MOD_INDEX*/]);
+	notestate[5/*SLIDER_NOTE_STATE:SMOOTHING_FACTOR*/] = state[3/*SLIDER_STATE:SMOOTHING*/] ? (
+		1 - min(1, 1/(state[3/*SLIDER_STATE:SMOOTHING*/]*srate))
+	) : 0;
+);
+effectspec[7/*FX_HEADER:PRE_EXEC_NOTE_FUNCTION*/] = 6/*effect_note_pre_exec_slider*/;
+function effect_note_pre_exec_slider(effect, note, notestate) local(state) (
+	state = effect + fx_list_headerlength;
+	
+	notestate[0/*SLIDER_NOTE_STATE:STRENGTH*/] = notestate[1/*SLIDER_NOTE_STATE:STRENGTH_BASE*/];
+);
+effectspec[8/*FX_HEADER:EXEC_NOTE_FUNCTION*/] = 7/*effect_note_exec_slider*/;
+function effect_note_exec_slider(effect, note, notestate) local(state, sliderIndex, value, targetIndex) (
+	state = effect + fx_list_headerlength;
+	targetIndex = notestate[3/*SLIDER_NOTE_STATE:TARGET*/];
+	sliderIndex = state[4/*SLIDER_STATE:SLIDER_INDEX*/];
+	sliderIndex == 1 ? (
+		value = slider1;
+	) : sliderIndex == 2 ? (
+		value = slider2;
+	) : sliderIndex == 3 ? (
+		value = slider2;
+	) : sliderIndex == 4 ? (
+		value = slider2;
+	) : sliderIndex == 5 ? (
+		value = slider5;
+	) : sliderIndex == 6 ? (
+		value = slider6;
+	) : sliderIndex == 7 ? (
+		value = slider7;
+	) : sliderIndex == 8 ? (
+		value = slider8;
+	) : (
+		value = 0;
+	);
+	// Smooth
+	//value += (notestate[2/*SLIDER_NOTE_STATE:VALUE*/] - value)*notestate[5/*SLIDER_NOTE_STATE:SMOOTHING_FACTOR*/];
+	notestate[2/*SLIDER_NOTE_STATE:VALUE*/] = value;
+	
+	targetIndex >= 0 ? (
+		value *= notestate[0/*SLIDER_NOTE_STATE:STRENGTH*/];
+		
+		notestate[4/*SLIDER_NOTE_STATE:MODTYPE*/] == 1/*FX_MODTYPE:ADD*/ ? (
 			note[targetIndex] += value;
 		) : (
 			note[targetIndex] *= max(0, 1 + value);
@@ -1485,6 +1666,7 @@ function effect_init(function_id, effect_slot) (
 		: function_id == 4 ? effect_init_dist(effect_slot)
 		: function_id == 5 ? effect_init_fm(effect_slot)
 		: function_id == 6 ? effect_init_env(effect_slot)
+		: function_id == 7 ? effect_init_slider(effect_slot)
 	);
 );;
 function config_ui(function_id, effect) (
@@ -1495,6 +1677,7 @@ function config_ui(function_id, effect) (
 		: function_id == 4 ? effect_ui_dist(effect)
 		: function_id == 5 ? effect_ui_fm(effect)
 		: function_id == 6 ? effect_ui_env(effect)
+		: function_id == 7 ? effect_ui_slider(effect)
 	);
 );;
 function config_swap(function_id, effect, index1, index2) (
@@ -1502,6 +1685,7 @@ function config_swap(function_id, effect, index1, index2) (
 		function_id == 1 ? effect_swap_lfo(effect, index1, index2)
 		: function_id == 2 ? effect_swap_conmod(effect, index1, index2)
 		: function_id == 3 ? effect_swap_env(effect, index1, index2)
+		: function_id == 4 ? effect_swap_slider(effect, index1, index2)
 	);
 );;
 function config_delete(function_id, effect, index) (
@@ -1509,6 +1693,7 @@ function config_delete(function_id, effect, index) (
 		function_id == 1 ? effect_delete_lfo(effect, index)
 		: function_id == 2 ? effect_delete_conmod(effect, index)
 		: function_id == 3 ? effect_delete_env(effect, index)
+		: function_id == 4 ? effect_delete_slider(effect, index)
 	);
 );;
 function note_setup(function_id, effect, note, notestate) (
@@ -1519,6 +1704,7 @@ function note_setup(function_id, effect, note, notestate) (
 		: function_id == 4 ? effect_note_setup_dist(effect, note, notestate)
 		: function_id == 5 ? effect_note_setup_fm(effect, note, notestate)
 		: function_id == 6 ? effect_note_setup_env(effect, note, notestate)
+		: function_id == 7 ? effect_note_setup_slider(effect, note, notestate)
 	);
 );;
 function note_exec(function_id, effect, note, notestate) (
@@ -1529,6 +1715,7 @@ function note_exec(function_id, effect, note, notestate) (
 		: function_id == 4 ? effect_note_exec_dist(effect, note, notestate)
 		: function_id == 5 ? effect_note_exec_fm(effect, note, notestate)
 		: function_id == 6 ? effect_note_exec_env(effect, note, notestate)
+		: function_id == 7 ? effect_note_exec_slider(effect, note, notestate)
 	);
 );;
 function note_pre_exec(function_id, effect, note, notestate) (
@@ -1538,6 +1725,7 @@ function note_pre_exec(function_id, effect, note, notestate) (
 		: function_id == 3 ? effect_note_pre_exec_dist(effect, note, notestate)
 		: function_id == 4 ? effect_note_pre_exec_fm(effect, note, notestate)
 		: function_id == 5 ? effect_note_pre_exec_env(effect, note, notestate)
+		: function_id == 6 ? effect_note_pre_exec_slider(effect, note, notestate)
 	);
 );;
 
