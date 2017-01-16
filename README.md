@@ -1,10 +1,12 @@
 # PadSynth
 
-This is a synth written in REAPER's JSFX language.  It is included in my [JSFX collection](https://geraintluff.github.io/jsfx/), which supports ReaPack.
-
-To install by hand, copy `pad-synth.jsfx` to REAPER's `Effects/` directory.  This synth uses a [JSFX UI library](https://github.com/geraintluff/jsfx-ui-lib) for its interface - you'll need to have `ui-lib.jsfx-inc` in the same directory as this synth for it to work.
+This is a synth written in REAPER's JSFX language, producing sounds that are thick and smooth.
 
 Demos are available in the `demos/` directory, and some presets are in `padsynth-presets.rpl`.
+
+To install using ReaPack, add my [JSFX collection](https://geraintluff.github.io/jsfx/).
+
+To install by hand, copy `pad-synth.jsfx` to REAPER's `Effects/` directory.  You will also need `ui-lib.jsfx-inc` from the [JSFX UI library](https://github.com/geraintluff/jsfx-ui-lib) in the same directory as this synth for it to work.
 
 ## Features
 
@@ -12,7 +14,7 @@ Demos are available in the `demos/` directory, and some presets are in `padsynth
 
 A "model waveform" is generated, and this is used to generate a set of patches used by a sampling engine.
 
-The samples are designed in the frequency domain (65536 samples long), and then IFFT'd.  By converting each harmonic into a frequency distribution (with random phase) it generates sounds that are both smooth and "thick".
+The samples are designed in the frequency domain (65536 samples long, 48kHz), and then IFFT'd.  By converting each harmonic into a frequency distribution (with random phase) it generates sounds that are both smooth and "thick".
 
 This thickness can be varied using a process vaguely similar to granular synthesis.
 
@@ -42,7 +44,7 @@ Want to make your vibrato dependent on the note velocity?  Want to make your fil
 
 ## Implementation details
 
-Although REAPER's built-in FFT has a maximum size of 32768, we can generate larger samples by implementing an extension to this (using Cooley-Tukey factorisation).
+Although REAPER's built-in FFT has a maximum size of 32768, we can generate larger samples by implementing an extension to this (using Cooley-Tukey factorisation).  This longer FFT code is available [here](https://github.com/geraintluff/jsfx-fft-big).
 
 Detuning width is varied by constantly cross-fading between two points in the sample one wavelength apart.  How often this crossfade is completed and whether we skip forward or backwards determines whether the overall progression rate through the sample is faster or slower than "natural" playback.  Progressing faster through the sample increases the detuning amount, and progressing slower decreases it.
 
