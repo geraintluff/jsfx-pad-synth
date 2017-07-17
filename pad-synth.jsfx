@@ -253,14 +253,15 @@ freemem = spread_cumulative + options_spreadsize;
 
 spread_mean = options_spreadsize/2;
 spread_std = options_spreadsize/10;
-function spread_update() local(i, cumulative, sum, sum2) (
+function spread_update() local(i, d2, cumulative, sum, sum2) (
 	sum = sum2 = 0;
 	cumulative = 0;
 	i = 0;
 	while (i < options_spreadsize) (
-		cumulative += spread_density[i];
-		sum += spread_density[i]*i;
-		sum2 += spread_density[i]*i*i;
+		d2 = spread_density[i]*spread_density[i];
+		cumulative += d2;
+		sum += d2*i;
+		sum2 += d2*i*i;
 		spread_cumulative[i] = cumulative;
 		i += 1;
 	);
@@ -2382,7 +2383,7 @@ function draw_density() local(i, box_left, box_top, box_width, box_height, index
 		y = max(0, min(1, 1 - ui_mouse_yratio()));
 		index = max(0, min(options_spreadsize - 1, floor(ui_mouse_xratio()*options_spreadsize + 0.5)));
 
-		ui_mouse_down() ? (
+		ui_mouse_down() && !(mouse_cap&8) ? (
 			density_last_index = index;
 			density_last_value = y;
 		);
