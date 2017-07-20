@@ -894,6 +894,7 @@ function effect_init_conmod(effect) local(state) (
 	state[CONMOD_STATE#AMOUNT(3)] = 0.015;
 	state[CONMOD_STATE#ZERO_POINT(4)] = 0.5;
 	state[CONMOD_STATE#CURVE(5)] = 0;
+	state[CONMOD_STATE#INVERT_SOURCE(6)] = 0;
 );
 effectspec[FX_HEADER#CONFIG_UI_FUNCTION] = {config_ui}effect_ui_conmod;
 function effect_conmod_curve(value, zero_point, curve) local(curvepower) (
@@ -913,28 +914,37 @@ function effect_ui_conmod(effect) local(state, effect_index, mod_range, source, 
 				ui_text("source");
 			ui_pop();
 			ui_split_rightratio(0.2);
+				ui_padleft();
+				ui_align(0, -1);
+				ui_text("invert");
 			ui_pop();
 
-			source = state[CONMOD_STATE#SOURCE];
-			source_prev = -2;
-			source_next = source;
-			i = -2;
-			while (i < 128) (
-				name = get_controller_name(i);
-				name >= 0 ? (
-					i == source ? (
-						source_name = name;
+			ui_split_leftratio(0.8);
+				ui_padright();
+
+				source = state[CONMOD_STATE#SOURCE];
+				source_prev = -2;
+				source_next = source;
+				i = -2;
+				while (i < 128) (
+					name = get_controller_name(i);
+					name >= 0 ? (
+						i == source ? (
+							source_name = name;
+						);
+						i < source ? source_prev = i;
+						i > source ? (
+							source_next = i;
+							i = 128;
+						);
 					);
-					i < source ? source_prev = i;
-					i > source ? (
-						source_next = i;
-						i = 128;
-					);
+					i += 1;
 				);
-				i += 1;
-			);
-			ui_align(0, -1);
-			state[CONMOD_STATE#SOURCE] = control_selector(source, source_name, source_next, source_prev);
+				ui_align(0, -1);
+				state[CONMOD_STATE#SOURCE] = control_selector(source, source_name, source_next, source_prev);
+			ui_pop();
+
+			state[CONMOD_STATE#INVERT_SOURCE] = control_switch(state[CONMOD_STATE#INVERT_SOURCE]);
 		ui_pop();
 	ui_split_next();
 		ui_push_heighttext(-1);
@@ -1011,7 +1021,11 @@ function effect_ui_conmod(effect) local(state, effect_index, mod_range, source, 
 	gfx_x = ui_left();
 	i = 0;
 	while (i <= 127) (
-		value = effect_conmod_curve(i/127, state[CONMOD_STATE#ZERO_POINT], state[CONMOD_STATE#CURVE]);
+		value = i/127;
+		state[CONMOD_STATE#INVERT_SOURCE] ? (
+			value = 1 - value;
+		);
+		value = effect_conmod_curve(value, state[CONMOD_STATE#ZERO_POINT], state[CONMOD_STATE#CURVE]);
 		y = ui_bottom() - ui_height()*(1 + value)/2;
 		i > 0 ? (
 			gfx_lineto(ui_left() + ui_width()*i/127, y, 1);
@@ -1066,11 +1080,16 @@ function effect_note_setup_conmod(effect, note, notestate) local(state) (
 );
 effectspec[FX_HEADER#PRE_EXEC_NOTE_FUNCTION] = 0;
 effectspec[FX_HEADER#EXEC_NOTE_FUNCTION] = {note_exec}effect_note_exec_conmod;
-function effect_note_exec_conmod(effect, note, notestate) local(source, value, targetIndex) (
+function effect_note_exec_conmod(effect, note, notestate) local(source, value, targetIndex, state) (
+	state = effect + fx_list_headerlength;
 	targetIndex = notestate[CONMOD_NOTE_STATE#TARGET];
 	source = notestate[CONMOD_NOTE_STATE#SOURCE];
 	targetIndex >= 0 ? (
 		value = (source == -1) ? note[NOTE#VEL]/127 : (source == -2) ? note[NOTE#NOTE]/127 : controller_values[source];
+		state[CONMOD_STATE#INVERT_SOURCE] ? (
+			value = 1 - value;
+		);
+
 		value = notestate[CONMOD_NOTE_STATE#AMOUNT]*2*(pow(value, notestate[CONMOD_NOTE_STATE#CURVE_POWER]) - notestate[CONMOD_NOTE_STATE#OFFSET]);
 		notestate[CONMOD_NOTE_STATE#VALUE] < 0 ? (
 			notestate[CONMOD_NOTE_STATE#VALUE] = value;
@@ -1724,12 +1743,20 @@ function {note_setup}(effect, note, notestate);
 function {note_exec}(effect, note, notestate);
 function {note_pre_exec}(effect, note, notestate);
 
-function append_effect(index) local(spec, effect, effect_name) (
+function append_effect(index) local(spec, effect, effect_name, i) (
 	fx_list_count < fx_list_maxcount ? (
 		// TODO: check the index is valid, otherwise insert placeholder (negative index)
 		effect = fx_list_start + fx_list_step*fx_list_count;
 		effect_name = string_fx_names_start + fx_list_count;
 		spec = fx_spec_start + fx_spec_step*index;
+
+		// Clear all effect state
+		i = 0;
+		while (i < fx_list_step) (
+			effect[i] = 0;
+			i += 1;
+		);
+
 		{effect_init:spec[FX_HEADER#FUNC_INIT]}(effect);
 		effect[FX#SPEC_INDEX] = index;
 
@@ -1816,6 +1843,7 @@ function reset_to_defaults() (
 	param_sustain = 0.75;
 	param_release = 0.03;
 	param_env_linear = 0;
+	param_vel_power = 1;
 
 	fx_list_count = 0;
 
@@ -1984,7 +2012,7 @@ while (midirecv(midi_offset, midi_msg1, midi_msg23)) (
 			note[NOTE#SECONDSFROMEND] = -note_maxduration - midi_offset*invsrate;
 			note[NOTE#DECAYRATE] = 0;
 			note[NOTE#FREQ_BASE] = 440*pow(2, (note[NOTE#NOTE] - 69)/12);
-			note[NOTE#AMP_BASE] = volume*note[NOTE#VEL]/127;
+			note[NOTE#AMP_BASE] = volume*pow(note[NOTE#VEL]/127, param_vel_power);
 
 			// Wavetable params
 			wavetable_index = log(note[NOTE#FREQ_BASE]/wavetable_low)/log(wavetable_high/wavetable_low)*wavetables_count;
@@ -2424,7 +2452,7 @@ ui_screen() == "main" ? (
 	ui_pad();
 
 	ui_align(0.5, 0.67);
-	text_height = ui_wraptext("This is a JSFX synth based on the 'padsynth' algorithm from ZynAddSubFX, which I love.  It has a focus on flexible per-note effects and modulation, and I\'m adding features as I need them.\n\nIt\'s a sample-based synth, where the samples are designed in the frequency domain (which allows customised harmonic spread) and then generated using an inverse FFT.\n\nThe GUI for this synth uses a JSFX UI library originally written for this synth, but is now a project of its own.\n\nhttps://github.com/geraintluff/jsfx-pad-synth\nhttps://github.com/geraintluff/jsfx-ui-lib");
+	text_height = ui_wraptext("This is a JSFX synth, with a focus on flexible per-note effects and modulation.\n\nThe initial sound is produced by a sampler.  Samples are generated according to parameters (based on the PadSynth algorithm used in ZynAddSubFX, hence the name), and the detuning width can be controlled by skipping backwards/forwards through these samples at a different rate.\n\nIt is part of a suite of JSFX effects.\n\nhttps://github.com/geraintluff/jsfx-pad-synth\nhttps://geraintluff.github.io/jsfx");
 
 	ui_push_above(text_height);
 		ui_align(0.5, 0.5);
@@ -2624,17 +2652,32 @@ ui_screen() == "main" ? (
 			param_release = control_hslider(param_release, 0.005, 5, 3);
 		ui_pop();
 	ui_split_next();
-		ui_push_heighttext(-1);
-			ui_split_leftratio(0.2);
-				ui_padright();
-				ui_align(1, -1);
-				ui_text("Curve");
-			ui_pop();
-			ui_split_rightratio(0.2);
-			ui_pop();
+		ui_split_leftratio(0.2);
+			ui_padright();
+			ui_align(1, -1);
+			ui_text("Curve");
+		ui_pop();
 
-			ui_align(0, -1); // Align left
-			param_env_linear = control_selector(param_env_linear, param_env_linear ? "Linear" : "Tapered", !param_env_linear, !param_env_linear);
+		ui_split_leftratio(0.4);
+			ui_push_heighttext(-1);
+				ui_align(0, -1); // Align left
+				param_env_linear = control_selector(param_env_linear, param_env_linear ? "Linear" : "Tapered", !param_env_linear, !param_env_linear);
+			ui_pop();
+		ui_pop();
+
+		ui_push_height(50);
+			ui_align(0.3, -1);
+			ui_push_width(50);
+				param_vel_power = control_dial(param_vel_power, 0, 2, 0);
+				ui_click() && ui_clickcount() == 2 ? (
+					param_vel_power = 1;
+				);
+			ui_pop();
+			ui_push_rightof(50);
+				ui_padleft();
+				ui_align(0, -1);
+				ui_text("Velocity");
+			ui_pop();
 		ui_pop();
 	ui_pop();
 ) : ui_screen() == "list-effects" ? (
@@ -3022,6 +3065,8 @@ function read_var() local(var_id, i, effect) (
 		param_waveform_mod1phase = read_plain_var();
 	) : var_id == VAR_ID#param_env_linear(99) ? (
 		param_env_linear = read_plain_var();
+	) : var_id == VAR_ID#param_vel_power(98) ? (
+		param_vel_power = read_plain_var();
 	) : var_id == VAR_ID#param_attack(100) ? (
 		param_attack = read_plain_var();
 	) : var_id == VAR_ID#param_decay(101) ? (
@@ -3128,6 +3173,7 @@ file_avail(0) >= 0 ? (
 	write_plain_var(VAR_ID#param_sustain(102), param_sustain);
 	write_plain_var(VAR_ID#param_release(103), param_release);
 	write_plain_var(VAR_ID#param_env_linear(99), param_env_linear);
+	write_plain_var(VAR_ID#param_vel_power(98), param_vel_power);
 	write_density_curve();
 	write_effects();
 );
