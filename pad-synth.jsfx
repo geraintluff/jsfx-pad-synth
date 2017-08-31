@@ -31,6 +31,7 @@ options_wavetables_samplerate = 48000; // Samples are rendered at this frequency
 options_wavetables_sampleslength = 65536; // Keeps the repetition just over a second - must be power of 2
 options_polyphony = 64;
 options_spreadsize = 1024;
+options_polyphonic_aftertouch = 1;
 
 //////////////// Setup and Memory Layout ////////////////
 
@@ -404,6 +405,9 @@ function get_effect_name(effectIndex) local(target_effect) (
 		target_effect[1/*FX:NAME*/];
 	);
 );
+
+polyphonic_aftertouch = freemem;
+freemem = polyphonic_aftertouch + 128;
 
 controller_values = freemem;
 freemem = controller_values + 128;
@@ -2072,6 +2076,7 @@ while (midirecv(midi_offset, midi_msg1, midi_msg23)) (
 			note[11/*NOTE:CHANNEL*/] = midi_channel;
 			note[5/*NOTE:NOTE*/] = midi_msg2;
 			note[4/*NOTE:VEL*/] = midi_msg3;
+			polyphonic_aftertouch[midi_msg2] = midi_msg3; // Initial aftertouch value
 			note[6/*NOTE:SECONDSFROMSTART*/] = -midi_offset*invsrate;
 			note[9/*NOTE:SECONDSFROMEND*/] = -note_maxduration - midi_offset*invsrate;
 			note[10/*NOTE:DECAYRATE*/] = 0;
@@ -2110,6 +2115,8 @@ while (midirecv(midi_offset, midi_msg1, midi_msg23)) (
 			note += notes_step;
 			note < notes_end;
 		);
+	) : (midi_type == 10) ? (
+		polyphonic_aftertouch[midi_msg2] = midi_msg3;
 	) : (midi_type == 11) ? (
 		midi_msg2 == 121 ? (
 			reset_controllers();
@@ -2146,7 +2153,7 @@ while (
 //////////////// Sampler ////////////////
 
 note = notes_start;
-while (
+while (note < note_active_end) (
 	note[3/*NOTE:ACTIVE*/] ? (
 		secondsFromStart = note[6/*NOTE:SECONDSFROMSTART*/];
 		secondsFromEnd = note[9/*NOTE:SECONDSFROMEND*/];
@@ -2155,6 +2162,11 @@ while (
 			note[0/*NOTE:FREQ*/] = note[12/*NOTE:FREQ_BASE*/];
 			note[1/*NOTE:AMP*/] = note[13/*NOTE:AMP_BASE*/];
 			note[2/*NOTE:GRANULAR_RATE_LOG*/] = 0;
+
+			options_polyphonic_aftertouch && secondsFromEnd < 0 ? (
+				note[4/*NOTE:VEL*/] = polyphonic_aftertouch[note[5/*NOTE:NOTE*/]];
+				note[13/*NOTE:AMP_BASE*/] = volume*pow(note[4/*NOTE:VEL*/]/127, param_vel_power);
+			);
 
 			// Sample from waveforms
 			wavetable = wavetables_start + note[14/*NOTE:WAVEINDEX_FROM*/]*wavetable_step;
@@ -2291,7 +2303,6 @@ while (
 		);
 	);
 	note += notes_step;
-	note < note_active_end;
 );
 
 @gfx 580 460
