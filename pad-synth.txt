@@ -404,20 +404,25 @@ function get_effect_name(effectIndex) local(target_effect) (
 	);
 );
 
-controller_values = freemem;
-freemem = controller_values + 128;
-function reset_controllers() (
-	i = 0;
-	while (i < 128) (
-		(i == 7 || i == 10 || (i >= 91 && i <= 95) || (i >= 70 && i <= 79) || i >= 120) ? (
-			controller_values[i] = controller_values[i];
-		) : (i >= 98 && i <= 101) ? (
-			controller_values[i] = 1;
-		) : (i != 0 && i != 32) ? (
-			controller_values[i] = 0;
+controller_values_multichannel = freemem;
+freemem = controller_values_multichannel + 128*16;
+function reset_controllers() local(c, i, controller_values) (
+	c = 0;
+	while (c < 16) (
+		controller_values = controller_values_multichannel + 128*c;
+		i = 0;
+		while (i < 128) (
+			(i == 7 || i == 10 || (i >= 91 && i <= 95) || (i >= 70 && i <= 79) || i >= 120) ? (
+				controller_values[i] = controller_values[i];
+			) : (i >= 98 && i <= 101) ? (
+				controller_values[i] = 1;
+			) : (i != 0 && i != 32) ? (
+				controller_values[i] = 0;
+			);
 		);
+		controller_values[11] = 1;
+		c += 1;
 	);
-	controller_values[11] = 1;
 );
 function get_controller_name(index) (
 	index == -2 ? (
@@ -1088,10 +1093,11 @@ function effect_note_setup_conmod(effect, note, notestate) local(state) (
 );
 effectspec[FX_HEADER#PRE_EXEC_NOTE_FUNCTION] = 0;
 effectspec[FX_HEADER#EXEC_NOTE_FUNCTION] = {note_exec}effect_note_exec_conmod;
-function effect_note_exec_conmod(effect, note, notestate) local(source, value, targetIndex, state) (
+function effect_note_exec_conmod(effect, note, notestate) local(source, value, targetIndex, state, controller_values) (
 	state = effect + fx_list_headerlength;
 	targetIndex = notestate[CONMOD_NOTE_STATE#TARGET];
 	source = notestate[CONMOD_NOTE_STATE#SOURCE];
+	controller_values = controller_values_multichannel + 128*note[NOTE#CHANNEL];
 	targetIndex >= 0 ? (
 		value = (source == -1) ? note[NOTE#VEL]/127 : (source == -2) ? note[NOTE#NOTE]/127 : controller_values[source];
 		state[CONMOD_STATE#INVERT_SOURCE] ? (
@@ -2060,7 +2066,11 @@ while (midirecv(midi_offset, midi_msg1, midi_msg23)) (
 		) : midi_msg == 120 ? (
 			clear_all_notes();
 		) : (
+			controller_values = controller_values_multichannel + 128*midi_channel;
 			controller_values[midi_msg2] = midi_msg3/127;
+			debug.controller_channel = midi_channel;
+			debug.controller_index = midi_msg2;
+			debug.controller_Value = midi_msg3;
 		);
 	);
 );
@@ -2220,6 +2230,7 @@ while (
 
 		note[NOTE#SECONDSFROMSTART] += invsrate;
 		secondsFromEnd >= 0 ? (
+			controller_values = controller_values_multichannel + 128*note[NOTE#CHANNEL];
 			note[NOTE#DECAYRATE] = max(1 - controller_values[64], note[NOTE#DECAYRATE]);
 			note[NOTE#SECONDSFROMEND] += invsrate*note[NOTE#DECAYRATE];
 		) : (

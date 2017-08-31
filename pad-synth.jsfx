@@ -405,20 +405,25 @@ function get_effect_name(effectIndex) local(target_effect) (
 	);
 );
 
-controller_values = freemem;
-freemem = controller_values + 128;
-function reset_controllers() (
-	i = 0;
-	while (i < 128) (
-		(i == 7 || i == 10 || (i >= 91 && i <= 95) || (i >= 70 && i <= 79) || i >= 120) ? (
-			controller_values[i] = controller_values[i];
-		) : (i >= 98 && i <= 101) ? (
-			controller_values[i] = 1;
-		) : (i != 0 && i != 32) ? (
-			controller_values[i] = 0;
+controller_values_multichannel = freemem;
+freemem = controller_values_multichannel + 128*16;
+function reset_controllers() local(c, i, controller_values) (
+	c = 0;
+	while (c < 16) (
+		controller_values = controller_values_multichannel + 128*c;
+		i = 0;
+		while (i < 128) (
+			(i == 7 || i == 10 || (i >= 91 && i <= 95) || (i >= 70 && i <= 79) || i >= 120) ? (
+				controller_values[i] = controller_values[i];
+			) : (i >= 98 && i <= 101) ? (
+				controller_values[i] = 1;
+			) : (i != 0 && i != 32) ? (
+				controller_values[i] = 0;
+			);
 		);
+		controller_values[11] = 1;
+		c += 1;
 	);
-	controller_values[11] = 1;
 );
 function get_controller_name(index) (
 	index == -2 ? (
@@ -454,7 +459,7 @@ function get_controller_name(index) (
 reset_controllers();
 
 notes_start = freemem;
-note_headerlength = 19/*NOTE: FREQ, AMP, GRANULAR_RATE_LOG, ACTIVE, VEL, NOTE, SECONDSFROMSTART, AUDIO_LEFT, AUDIO_RIGHT, SECONDSFROMEND, DECAYRATE, CHANNEL, FREQ_BASE, AMP_BASE, WAVEINDEX_FROM, SAMPLEPOS_FROM, SAMPLEPOS_TO, GRANULAR_POS, ENV*/;
+note_headerlength = 19/*NOTE: FREQ, AMP, GRANULAR_RATE_LOG, ACTIVE, VEL, NOTE, SECONDSFROMSTART, AUDIO_LEFT, AUDIO_RIGHT, CHANNEL, SECONDSFROMEND, DECAYRATE, FREQ_BASE, AMP_BASE, WAVEINDEX_FROM, SAMPLEPOS_FROM, SAMPLEPOS_TO, GRANULAR_POS, ENV*/;
 
 note_fx_statelength = fx_list_statelength;
 notes_step = note_headerlength + note_fx_statelength*fx_list_maxcount;
@@ -1089,10 +1094,11 @@ function effect_note_setup_conmod(effect, note, notestate) local(state) (
 );
 effectspec[7/*FX_HEADER:PRE_EXEC_NOTE_FUNCTION*/] = 0;
 effectspec[8/*FX_HEADER:EXEC_NOTE_FUNCTION*/] = 3/*effect_note_exec_conmod*/;
-function effect_note_exec_conmod(effect, note, notestate) local(source, value, targetIndex, state) (
+function effect_note_exec_conmod(effect, note, notestate) local(source, value, targetIndex, state, controller_values) (
 	state = effect + fx_list_headerlength;
 	targetIndex = notestate[0/*CONMOD_NOTE_STATE:TARGET*/];
 	source = notestate[2/*CONMOD_NOTE_STATE:SOURCE*/];
+	controller_values = controller_values_multichannel + 128*note[9/*NOTE:CHANNEL*/];
 	targetIndex >= 0 ? (
 		value = (source == -1) ? note[4/*NOTE:VEL*/]/127 : (source == -2) ? note[5/*NOTE:NOTE*/]/127 : controller_values[source];
 		state[6/*CONMOD_STATE:INVERT_SOURCE*/] ? (
@@ -1553,7 +1559,7 @@ function effect_note_exec_env(effect, note, notestate) local(ratio, value) (
 		);
 
 		notestate[3/*ENV_NOTE_STATE:RELEASE_TIME*/] ? (
-			ratio = note[9/*NOTE:SECONDSFROMEND*/]/notestate[3/*ENV_NOTE_STATE:RELEASE_TIME*/];
+			ratio = note[10/*NOTE:SECONDSFROMEND*/]/notestate[3/*ENV_NOTE_STATE:RELEASE_TIME*/];
 			ratio > 0 ? (
 				value += min(1, ratio)*notestate[2/*ENV_NOTE_STATE:RELEASE_VALUE*/];
 			);
@@ -2055,8 +2061,8 @@ while (midirecv(midi_offset, midi_msg1, midi_msg23)) (
 			while (note < notes_end) (
 				note[3/*NOTE:ACTIVE*/] && (note[5/*NOTE:NOTE*/] == midi_msg2) ? (
 					// Force release of duplicate notes
-					note[9/*NOTE:SECONDSFROMEND*/] = max(note[9/*NOTE:SECONDSFROMEND*/], -midi_offset*invsrate);
-					note[10/*NOTE:DECAYRATE*/] = 1;
+					note[10/*NOTE:SECONDSFROMEND*/] = max(note[10/*NOTE:SECONDSFROMEND*/], -midi_offset*invsrate);
+					note[11/*NOTE:DECAYRATE*/] = 1;
 				);
 				note += notes_step;
 			);
@@ -2069,12 +2075,12 @@ while (midirecv(midi_offset, midi_msg1, midi_msg23)) (
 		note < notes_end ? (
 			// Note parameters
 			note[3/*NOTE:ACTIVE*/] = 1;
-			note[11/*NOTE:CHANNEL*/] = midi_channel;
+			note[9/*NOTE:CHANNEL*/] = midi_channel;
 			note[5/*NOTE:NOTE*/] = midi_msg2;
 			note[4/*NOTE:VEL*/] = midi_msg3;
 			note[6/*NOTE:SECONDSFROMSTART*/] = -midi_offset*invsrate;
-			note[9/*NOTE:SECONDSFROMEND*/] = -note_maxduration - midi_offset*invsrate;
-			note[10/*NOTE:DECAYRATE*/] = 0;
+			note[10/*NOTE:SECONDSFROMEND*/] = -note_maxduration - midi_offset*invsrate;
+			note[11/*NOTE:DECAYRATE*/] = 0;
 			note[12/*NOTE:FREQ_BASE*/] = 440*pow(2, (note[5/*NOTE:NOTE*/] - 69)/12);
 			note[13/*NOTE:AMP_BASE*/] = volume*pow(note[4/*NOTE:VEL*/]/127, param_vel_power);
 
@@ -2104,8 +2110,8 @@ while (midirecv(midi_offset, midi_msg1, midi_msg23)) (
 		// Note off
 		note = notes_start;
 		while (
-			note[3/*NOTE:ACTIVE*/] && note[11/*NOTE:CHANNEL*/] == midi_channel && note[5/*NOTE:NOTE*/] == midi_msg2 ? (
-				note[9/*NOTE:SECONDSFROMEND*/] = max(note[9/*NOTE:SECONDSFROMEND*/], -midi_offset*invsrate);
+			note[3/*NOTE:ACTIVE*/] && note[9/*NOTE:CHANNEL*/] == midi_channel && note[5/*NOTE:NOTE*/] == midi_msg2 ? (
+				note[10/*NOTE:SECONDSFROMEND*/] = max(note[10/*NOTE:SECONDSFROMEND*/], -midi_offset*invsrate);
 			);
 			note += notes_step;
 			note < notes_end;
@@ -2117,14 +2123,18 @@ while (midirecv(midi_offset, midi_msg1, midi_msg23)) (
 			note = notes_start;
 			while (note < notes_end) (
 				note[3/*NOTE:ACTIVE*/] ? (
-					note[9/*NOTE:SECONDSFROMEND*/] = 0;
+					note[10/*NOTE:SECONDSFROMEND*/] = 0;
 				);
 				note += note_step;
 			);
 		) : midi_msg == 120 ? (
 			clear_all_notes();
 		) : (
+			controller_values = controller_values_multichannel + 128*midi_channel;
 			controller_values[midi_msg2] = midi_msg3/127;
+			debug.controller_channel = midi_channel;
+			debug.controller_index = midi_msg2;
+			debug.controller_Value = midi_msg3;
 		);
 	);
 );
@@ -2149,7 +2159,7 @@ note = notes_start;
 while (
 	note[3/*NOTE:ACTIVE*/] ? (
 		secondsFromStart = note[6/*NOTE:SECONDSFROMSTART*/];
-		secondsFromEnd = note[9/*NOTE:SECONDSFROMEND*/];
+		secondsFromEnd = note[10/*NOTE:SECONDSFROMEND*/];
 
 		secondsFromStart > 0 ? (
 			note[0/*NOTE:FREQ*/] = note[12/*NOTE:FREQ_BASE*/];
@@ -2284,10 +2294,11 @@ while (
 
 		note[6/*NOTE:SECONDSFROMSTART*/] += invsrate;
 		secondsFromEnd >= 0 ? (
-			note[10/*NOTE:DECAYRATE*/] = max(1 - controller_values[64], note[10/*NOTE:DECAYRATE*/]);
-			note[9/*NOTE:SECONDSFROMEND*/] += invsrate*note[10/*NOTE:DECAYRATE*/];
+			controller_values = controller_values_multichannel + 128*note[9/*NOTE:CHANNEL*/];
+			note[11/*NOTE:DECAYRATE*/] = max(1 - controller_values[64], note[11/*NOTE:DECAYRATE*/]);
+			note[10/*NOTE:SECONDSFROMEND*/] += invsrate*note[11/*NOTE:DECAYRATE*/];
 		) : (
-			note[9/*NOTE:SECONDSFROMEND*/] += invsrate;
+			note[10/*NOTE:SECONDSFROMEND*/] += invsrate;
 		);
 	);
 	note += notes_step;
