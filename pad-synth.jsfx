@@ -1745,73 +1745,150 @@ function effect_note_exec_slider(effect, note, notestate) local(state, sliderInd
 //////////////// Effect Manipulation ////////////////
 
 function effect_init(function_id, effect_slot) (
-	function_id ? (
-		function_id == 1 ? effect_init_lfo(effect_slot)
-		: function_id == 2 ? effect_init_filter(effect_slot)
-		: function_id == 3 ? effect_init_conmod(effect_slot)
-		: function_id == 4 ? effect_init_dist(effect_slot)
-		: function_id == 5 ? effect_init_fm(effect_slot)
-		: function_id == 6 ? effect_init_env(effect_slot)
-		: function_id == 7 ? effect_init_slider(effect_slot)
+	(function_id < 4 ?
+		(function_id < 2 ?
+			(function_id < 1 ?
+				0
+				: effect_init_lfo(effect_slot)
+			)
+			: (function_id < 3 ?
+				effect_init_filter(effect_slot)
+				: effect_init_conmod(effect_slot)
+			)
+		)
+		: (function_id < 6 ?
+			(function_id < 5 ?
+				effect_init_dist(effect_slot)
+				: effect_init_fm(effect_slot)
+			)
+			: (function_id < 7 ?
+				effect_init_env(effect_slot)
+				: effect_init_slider(effect_slot)
+			)
+		)
 	);
 );;
 function config_ui(function_id, effect) (
-	function_id ? (
-		function_id == 1 ? effect_ui_lfo(effect)
-		: function_id == 2 ? effect_ui_filter(effect)
-		: function_id == 3 ? effect_ui_conmod(effect)
-		: function_id == 4 ? effect_ui_dist(effect)
-		: function_id == 5 ? effect_ui_fm(effect)
-		: function_id == 6 ? effect_ui_env(effect)
-		: function_id == 7 ? effect_ui_slider(effect)
+	(function_id < 4 ?
+		(function_id < 2 ?
+			(function_id < 1 ?
+				0
+				: effect_ui_lfo(effect)
+			)
+			: (function_id < 3 ?
+				effect_ui_filter(effect)
+				: effect_ui_conmod(effect)
+			)
+		)
+		: (function_id < 6 ?
+			(function_id < 5 ?
+				effect_ui_dist(effect)
+				: effect_ui_fm(effect)
+			)
+			: (function_id < 7 ?
+				effect_ui_env(effect)
+				: effect_ui_slider(effect)
+			)
+		)
 	);
 );;
 function config_swap(function_id, effect, index1, index2) (
-	function_id ? (
-		function_id == 1 ? effect_swap_lfo(effect, index1, index2)
-		: function_id == 2 ? effect_swap_conmod(effect, index1, index2)
-		: function_id == 3 ? effect_swap_env(effect, index1, index2)
-		: function_id == 4 ? effect_swap_slider(effect, index1, index2)
+	(function_id < 3 ?
+		(function_id < 2 ?
+			(function_id < 1 ?
+				0
+				: effect_swap_lfo(effect, index1, index2)
+			)
+			: effect_swap_conmod(effect, index1, index2)
+		)
+		: (function_id < 4 ?
+			effect_swap_env(effect, index1, index2)
+			: effect_swap_slider(effect, index1, index2)
+		)
 	);
 );;
 function config_delete(function_id, effect, index) (
-	function_id ? (
-		function_id == 1 ? effect_delete_lfo(effect, index)
-		: function_id == 2 ? effect_delete_conmod(effect, index)
-		: function_id == 3 ? effect_delete_env(effect, index)
-		: function_id == 4 ? effect_delete_slider(effect, index)
+	(function_id < 3 ?
+		(function_id < 2 ?
+			(function_id < 1 ?
+				0
+				: effect_delete_lfo(effect, index)
+			)
+			: effect_delete_conmod(effect, index)
+		)
+		: (function_id < 4 ?
+			effect_delete_env(effect, index)
+			: effect_delete_slider(effect, index)
+		)
 	);
 );;
 function note_setup(function_id, effect, note, notestate) (
-	function_id ? (
-		function_id == 1 ? effect_note_setup_lfo(effect, note, notestate)
-		: function_id == 2 ? effect_note_setup_filter(effect, note, notestate)
-		: function_id == 3 ? effect_note_setup_conmod(effect, note, notestate)
-		: function_id == 4 ? effect_note_setup_dist(effect, note, notestate)
-		: function_id == 5 ? effect_note_setup_fm(effect, note, notestate)
-		: function_id == 6 ? effect_note_setup_env(effect, note, notestate)
-		: function_id == 7 ? effect_note_setup_slider(effect, note, notestate)
+	(function_id < 4 ?
+		(function_id < 2 ?
+			(function_id < 1 ?
+				0
+				: effect_note_setup_lfo(effect, note, notestate)
+			)
+			: (function_id < 3 ?
+				effect_note_setup_filter(effect, note, notestate)
+				: effect_note_setup_conmod(effect, note, notestate)
+			)
+		)
+		: (function_id < 6 ?
+			(function_id < 5 ?
+				effect_note_setup_dist(effect, note, notestate)
+				: effect_note_setup_fm(effect, note, notestate)
+			)
+			: (function_id < 7 ?
+				effect_note_setup_env(effect, note, notestate)
+				: effect_note_setup_slider(effect, note, notestate)
+			)
+		)
 	);
 );;
 function note_exec(function_id, effect, note, notestate) (
-	function_id ? (
-		function_id == 1 ? effect_note_exec_lfo(effect, note, notestate)
-		: function_id == 2 ? effect_note_exec_filter(effect, note, notestate)
-		: function_id == 3 ? effect_note_exec_conmod(effect, note, notestate)
-		: function_id == 4 ? effect_note_exec_dist(effect, note, notestate)
-		: function_id == 5 ? effect_note_exec_fm(effect, note, notestate)
-		: function_id == 6 ? effect_note_exec_env(effect, note, notestate)
-		: function_id == 7 ? effect_note_exec_slider(effect, note, notestate)
+	(function_id < 4 ?
+		(function_id < 2 ?
+			(function_id < 1 ?
+				0
+				: effect_note_exec_lfo(effect, note, notestate)
+			)
+			: (function_id < 3 ?
+				effect_note_exec_filter(effect, note, notestate)
+				: effect_note_exec_conmod(effect, note, notestate)
+			)
+		)
+		: (function_id < 6 ?
+			(function_id < 5 ?
+				effect_note_exec_dist(effect, note, notestate)
+				: effect_note_exec_fm(effect, note, notestate)
+			)
+			: (function_id < 7 ?
+				effect_note_exec_env(effect, note, notestate)
+				: effect_note_exec_slider(effect, note, notestate)
+			)
+		)
 	);
 );;
 function note_pre_exec(function_id, effect, note, notestate) (
-	function_id ? (
-		function_id == 1 ? effect_note_pre_exec_lfo(effect, note, notestate)
-		: function_id == 2 ? effect_note_pre_exec_filter(effect, note, notestate)
-		: function_id == 3 ? effect_note_pre_exec_dist(effect, note, notestate)
-		: function_id == 4 ? effect_note_pre_exec_fm(effect, note, notestate)
-		: function_id == 5 ? effect_note_pre_exec_env(effect, note, notestate)
-		: function_id == 6 ? effect_note_pre_exec_slider(effect, note, notestate)
+	(function_id < 4 ?
+		(function_id < 2 ?
+			(function_id < 1 ?
+				0
+				: effect_note_pre_exec_lfo(effect, note, notestate)
+			)
+			: (function_id < 3 ?
+				effect_note_pre_exec_filter(effect, note, notestate)
+				: effect_note_pre_exec_dist(effect, note, notestate)
+			)
+		)
+		: (function_id < 6 ?
+			(function_id < 5 ?
+				effect_note_pre_exec_fm(effect, note, notestate)
+				: effect_note_pre_exec_env(effect, note, notestate)
+			)
+			: effect_note_pre_exec_slider(effect, note, notestate)
+		)
 	);
 );;
 
