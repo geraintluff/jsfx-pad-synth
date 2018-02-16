@@ -265,7 +265,6 @@ function spread_update() local(i, d2, cumulative, sum, sum2) (
 		spread_cumulative[i] = cumulative;
 		i += 1;
 	);
-	debug.cumulative = cumulative;
 	cumulative ? (
 		spread_mean = sum/cumulative;
 		spread_std = sqrt(sum2/cumulative - spread_mean*spread_mean);
@@ -1116,7 +1115,6 @@ function effect_note_exec_conmod(effect, note, notestate) local(source, value, t
 			notestate[CONMOD_NOTE_STATE#VALUE] = value;
 		) : (
 			value = notestate[CONMOD_NOTE_STATE#VALUE] = notestate[CONMOD_NOTE_STATE#VALUE] + (value - notestate[CONMOD_NOTE_STATE#VALUE])*notestate[CONMOD_NOTE_STATE#SLEWFACTOR];
-			debug.slewfactor = notestate[CONMOD_NOTE_STATE#SLEWFACTOR];
 		);
 		notestate[CONMOD_NOTE_STATE#MODTYPE] == FX_MODTYPE#ADD ? (
 			note[targetIndex] += value;
@@ -1902,9 +1900,6 @@ recompute_index < wavetables_count ? (
 			indexfreq_high = (i + 0.5)/wavetable_sampleslength*wavetable_refsrate;
 			harmonic_freq = base_freq*max(1, floor(indexfreq/base_freq/harmonic_range_factor));
 
-			debug.firstharmonicfreq = harmonic_freq;
-			debug.ratio=indexfreq/base_freq;
-
 			end_freq = min(wavetable_maxfreq, indexfreq*harmonic_range_factor);
 			while (harmonic_freq < end_freq) (
 				harmonic_width = param_width*pow(harmonic_freq/base_freq, param_width_scaling - 1);
@@ -2036,7 +2031,6 @@ while (midirecv(midi_offset, midi_msg1, midi_msg23)) (
 			wavetable_index = min(wavetables_count - 1, max(0, floor(wavetable_index)));
 			note[NOTE#WAVEINDEX_FROM] = wavetable_index; // Wavetable #0
 			note[NOTE#SAMPLEPOS_FROM] = rand(wavetable_sampleslength);
-			debug.start = note[NOTE#SAMPLEPOS_FROM];
 			note[NOTE#SAMPLEPOS_TO] = note[NOTE#SAMPLEPOS_FROM];
 			note[NOTE#GRANULAR_POS] = 1;
 
@@ -2355,9 +2349,6 @@ function draw_density() local(i, box_left, box_top, box_width, box_height, index
 		x = box_left + box_width*(spread_mean - 3*spread_std)/options_spreadsize;
 		w = box_width*(6*spread_std)/options_spreadsize;
 		gfx_rect(x, box_top, w, box_height);
-
-		debug.x = x;
-		debug.w = w;
 	ui_pop();
 
 	gfx_a = 0.8;
