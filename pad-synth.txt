@@ -2503,6 +2503,7 @@ ui_screen() == "main" ? (
 	ui_split_topratio(0.4);
 		ui_split_rightratio(0.5);
 			ui_pad4(ui_hpadding()/2, 0, 0, 0);
+			ui_retina(1);
 			ui_color(0, 0, 0);
 			ui_fill();
 			ui_color(192, 128, 64);
@@ -2522,6 +2523,7 @@ ui_screen() == "main" ? (
 			action_recalculate_spectrum = 1;
 
 			ui_pad4(0, 0, ui_hpadding()/2, 0);
+			ui_retina(1);
 			ui_color(0, 0, 0);
 			ui_fill();
 			ui_color(192, 128, 64);
