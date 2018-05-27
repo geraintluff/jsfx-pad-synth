@@ -18,6 +18,25 @@ import ui-lib-compat.jsfx-inc
 
 @init
 
+// Temporary: overwrite rand() so that it's deterministic, so we can compare results when refactoring
+function rand_reset() (
+	rand_index = 0;
+);
+function rand(x) local(value) (
+	rand_index += 1;
+	value = sin(rand_index*1)
+		+ sin(rand_index*sqrt(2))
+		+ sin(rand_index*sqrt(3))
+		+ sin(rand_index*sqrt(5))
+		+ sin(rand_index*sqrt(7))
+		+ sin(rand_index*sqrt(11))
+		+ sin(rand_index*sqrt(13))
+		+ sin(rand_index*sqrt(17))
+		+ 10000;
+	(value - floor(value))*(x ? x : 1);
+);
+rand_reset();
+
 // Configuration options:
 // 	Feel free to change these, but you'll need to do a complete reset afterwards
 // 	because many of them affect the memory layout.
@@ -1865,6 +1884,9 @@ function reset_to_defaults() (
 !has_set_parameters ? reset_to_defaults();
 
 @block
+
+// Temporary: make rand() deterministic, so that we can compare results when refactoring
+rand_reset();
 
 //////////////// Compute Samples ////////////////
 
