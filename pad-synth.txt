@@ -1,5 +1,6 @@
 desc:PadSynth (by Geraint Luff)
-in_pin:none;
+in_pin:Left
+in_pin:Right
 out_pin:Left
 out_pin:Right
 options:want_all_kb
